@@ -1,3 +1,5 @@
+import { InferenceClient } from "@huggingface/inference";
+
 export default async function handler(req, res) {
     if (req.method !== "POST") {
         return res.status(405).json({
@@ -15,53 +17,51 @@ export default async function handler(req, res) {
         }
 
         const finalPrompt = `
-Create a high-quality vertical mobile wallpaper.
+Create a high-quality vertical mobile anime wallpaper.
 
 ${prompt}
 
-Style: beautiful anime artwork, cinematic lighting,
-high detail, sharp focus, detailed background,
-professional composition, vibrant colors,
-9:16 portrait composition, 4K wallpaper quality.
+Style:
+beautiful anime artwork,
+cinematic lighting,
+detailed characters,
+highly detailed background,
+sharp focus,
+professional composition,
+vibrant colors,
+dramatic atmosphere,
+9:16 portrait composition,
+mobile wallpaper,
+high quality.
         `.trim();
 
-        const response = await fetch(
-            "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
-            {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${process.env.HF_TOKEN}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    inputs: finalPrompt
-                })
-            }
+        const hf = new InferenceClient(
+            process.env.HF_TOKEN
         );
 
-        if (!response.ok) {
-            const errorText = await response.text();
+        const image = await hf.textToImage({
+            model: "black-forest-labs/FLUX.1-schnell",
+            provider: "auto",
+            inputs: finalPrompt
+        });
 
-            return res.status(response.status).json({
-                error: errorText || "AI generation failed"
-            });
-        }
+        // Convert generated Blob to Base64
+        const arrayBuffer = await image.arrayBuffer();
 
-        const imageBuffer = await response.arrayBuffer();
-
-        const base64Image = Buffer
-            .from(imageBuffer)
+        const base64 = Buffer
+            .from(arrayBuffer)
             .toString("base64");
 
         return res.status(200).json({
-            image: `data:image/png;base64,${base64Image}`
+            image: `data:image/png;base64,${base64}`
         });
 
     } catch (error) {
-        console.error(error);
+
+        console.error("HF ERROR:", error);
 
         return res.status(500).json({
-            error: "Something went wrong while generating the wallpaper."
+            error: error?.message || "AI generation failed"
         });
     }
 }
