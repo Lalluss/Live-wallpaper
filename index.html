@@ -279,25 +279,61 @@
 
 <script>
 
-function generateWallpaper() {
+async function generateWallpaper() {
 
     const prompt = document.getElementById("prompt").value.trim();
     const status = document.getElementById("status");
+    const button = document.querySelector(".generate");
+    const image = document.getElementById("wallpaper");
+    const previewText = document.getElementById("previewText");
 
     if (!prompt) {
         status.innerText = "⚠️ First describe your wallpaper.";
         return;
     }
 
-    status.innerText = "✨ AI wallpaper generation will be connected here...";
+    button.disabled = true;
+    button.innerText = "✨ Creating Wallpaper...";
+    status.innerText = "🤖 AI is creating your wallpaper...";
 
-    /*
-       AI API will be connected in the next step.
+    try {
 
-       We are NOT putting an API key inside this HTML file.
-       The request will go through our secure backend.
-    */
+        const response = await fetch("/api/generate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                prompt: prompt
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Generation failed");
+        }
+
+        image.src = data.image;
+        image.style.display = "block";
+        previewText.style.display = "none";
+
+        status.innerText = "✅ Wallpaper created successfully!";
+
+    } catch (error) {
+
+        console.error(error);
+
+        status.innerText =
+            "❌ " + (error.message || "Something went wrong.");
+
+    } finally {
+
+        button.disabled = false;
+        button.innerText = "✨ Generate Wallpaper";
+    }
 }
+
 
 function setWallpaper(type) {
 
@@ -308,14 +344,29 @@ function setWallpaper(type) {
         return;
     }
 
-    alert(
-        type === "home"
-        ? "🏠 Home Screen setting will be connected in the Android app."
-        : type === "lock"
-        ? "🔒 Lock Screen setting will be connected in the Android app."
-        : "🏠🔒 Both screens setting will be connected in the Android app."
-    );
+    if (type === "home") {
+
+        alert(
+            "🏠 Home Screen\n\n" +
+            "Android app version-il direct wallpaper setting add cheyyum."
+        );
+
+    } else if (type === "lock") {
+
+        alert(
+            "🔒 Lock Screen\n\n" +
+            "Android app version-il direct wallpaper setting add cheyyum."
+        );
+
+    } else {
+
+        alert(
+            "🏠🔒 Both Screens\n\n" +
+            "Android app version-il direct wallpaper setting add cheyyum."
+        );
+    }
 }
+
 
 function downloadWallpaper() {
 
@@ -327,12 +378,16 @@ function downloadWallpaper() {
     }
 
     const link = document.createElement("a");
+
     link.href = image.src;
-    link.download = "anime-wallpaper.jpg";
+    link.download = "anime-wallpaper.png";
+
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 }
 
-</script>
+    </script>
 
 </body>
 </html>
