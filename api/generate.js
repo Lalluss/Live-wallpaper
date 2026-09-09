@@ -21,31 +21,26 @@ Create a high-quality vertical mobile anime wallpaper.
 
 ${prompt}
 
-Style:
-beautiful anime artwork,
+Beautiful anime artwork,
 cinematic lighting,
-detailed characters,
-highly detailed background,
+highly detailed character,
+detailed environment,
 sharp focus,
 professional composition,
-vibrant colors,
 dramatic atmosphere,
+vibrant colors,
 9:16 portrait composition,
-mobile wallpaper,
-high quality.
+mobile wallpaper quality.
         `.trim();
 
-        const hf = new InferenceClient(
-            process.env.HF_TOKEN
-        );
+        const hf = new InferenceClient(process.env.HF_TOKEN);
 
         const image = await hf.textToImage({
             model: "black-forest-labs/FLUX.1-schnell",
-            provider: "auto",
+            provider: "fal-ai",
             inputs: finalPrompt
         });
 
-        // Convert generated Blob to Base64
         const arrayBuffer = await image.arrayBuffer();
 
         const base64 = Buffer
@@ -57,7 +52,6 @@ high quality.
         });
 
     } catch (error) {
-
         console.error("HF ERROR:", error);
 
         return res.status(500).json({
