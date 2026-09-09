@@ -1,393 +1,834 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AnimeWall AI</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+<title>AnimeWall</title>
 
-        body {
-            font-family: Arial, sans-serif;
-            background: #08090f;
-            color: white;
-            min-height: 100vh;
-        }
+<style>
 
-        .app {
-            width: 100%;
-            max-width: 500px;
-            margin: auto;
-            padding: 20px;
-        }
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 30px;
-        }
+body {
+    font-family: Arial, sans-serif;
+    background: #08090f;
+    color: white;
+    min-height: 100vh;
+}
 
-        .logo {
-            font-size: 24px;
-            font-weight: 800;
-        }
+.app {
+    width: 100%;
+    max-width: 600px;
+    margin: auto;
+    padding: 20px 16px 50px;
+}
 
-        .logo span {
-            color: #ff5c8a;
-        }
+/* HEADER */
 
-        .badge {
-            background: #171923;
-            border: 1px solid #292c3a;
-            padding: 7px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            color: #aaa;
-        }
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 35px;
+}
 
-        .hero {
-            text-align: center;
-            margin-bottom: 28px;
-        }
+.logo {
+    font-size: 28px;
+    font-weight: 900;
+}
 
-        .hero h1 {
-            font-size: 34px;
-            line-height: 1.15;
-            margin-bottom: 12px;
-        }
+.logo span {
+    color: #ff4f91;
+}
 
-        .hero h1 span {
-            color: #ff5c8a;
-        }
+.badge {
+    background: #151722;
+    border: 1px solid #292c3a;
+    padding: 10px 16px;
+    border-radius: 30px;
+    font-size: 12px;
+    color: #aaa;
+}
 
-        .hero p {
-            color: #9296a8;
-            font-size: 14px;
-            line-height: 1.6;
-        }
+/* HERO */
 
-        .card {
-            background: #11131c;
-            border: 1px solid #242735;
-            border-radius: 20px;
-            padding: 18px;
-            margin-bottom: 20px;
-        }
+.hero {
+    text-align: center;
+    margin-bottom: 35px;
+}
 
-        .label {
-            font-size: 14px;
-            font-weight: 700;
-            margin-bottom: 12px;
-        }
+.hero h1 {
+    font-size: 42px;
+    line-height: 1.05;
+    margin-bottom: 18px;
+}
 
-        textarea {
-            width: 100%;
-            min-height: 130px;
-            resize: none;
-            background: #090a10;
-            border: 1px solid #292c3a;
-            border-radius: 14px;
-            padding: 15px;
-            color: white;
-            font-size: 15px;
-            outline: none;
-        }
+.hero h1 span {
+    color: #ff4f91;
+}
 
-        textarea:focus {
-            border-color: #ff5c8a;
-        }
+.hero p {
+    color: #85899a;
+    font-size: 16px;
+    line-height: 1.6;
+}
 
-        textarea::placeholder {
-            color: #666b7c;
-        }
+/* SECTION */
 
-        .generate {
-            width: 100%;
-            margin-top: 14px;
-            border: none;
-            border-radius: 14px;
-            padding: 15px;
-            background: linear-gradient(135deg, #ff5c8a, #9b5cff);
-            color: white;
-            font-size: 16px;
-            font-weight: 800;
-            cursor: pointer;
-        }
+.section {
+    background: #11131c;
+    border: 1px solid #242735;
+    border-radius: 22px;
+    padding: 18px;
+    margin-bottom: 20px;
+}
 
-        .generate:active {
-            transform: scale(0.98);
-        }
+.section-title {
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 15px;
+}
 
-        .preview {
-            width: 100%;
-            aspect-ratio: 9 / 16;
-            border-radius: 18px;
-            background: linear-gradient(145deg, #151827, #0b0c12);
-            border: 1px solid #292c3a;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-        }
+/* ADMIN */
 
-        .preview-text {
-            text-align: center;
-            color: #626778;
-            padding: 30px;
-        }
+.admin-box {
+    display: none;
+}
 
-        .preview-text .icon {
-            font-size: 45px;
-            margin-bottom: 12px;
-        }
+input[type="file"] {
+    width: 100%;
+    padding: 14px;
+    background: #090a10;
+    border: 1px solid #292c3a;
+    border-radius: 14px;
+    color: white;
+    margin-bottom: 12px;
+}
 
-        .preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: none;
-        }
+input[type="text"] {
+    width: 100%;
+    padding: 14px;
+    background: #090a10;
+    border: 1px solid #292c3a;
+    border-radius: 14px;
+    color: white;
+    outline: none;
+    margin-bottom: 12px;
+}
 
-        .buttons {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 14px;
-        }
+.primary-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ff4f91, #9657ff);
+    color: white;
+    font-weight: 800;
+    font-size: 15px;
+    cursor: pointer;
+}
 
-        .wall-btn {
-            padding: 13px 8px;
-            border-radius: 12px;
-            border: 1px solid #292c3a;
-            background: #171923;
-            color: white;
-            font-size: 13px;
-            cursor: pointer;
-        }
+/* WALLPAPER */
 
-        .wall-btn:hover {
-            border-color: #ff5c8a;
-        }
+.wallpaper-card {
+    background: #151722;
+    border: 1px solid #292c3a;
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 18px;
+}
 
-        .download {
-            width: 100%;
-            margin-top: 10px;
-            padding: 13px;
-            border: none;
-            border-radius: 12px;
-            background: white;
-            color: #08090f;
-            font-weight: 700;
-            cursor: pointer;
-        }
+.wallpaper-preview {
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    background: #090a10;
+    position: relative;
+}
 
-        .status {
-            text-align: center;
-            color: #85899a;
-            font-size: 12px;
-            margin-top: 15px;
-            min-height: 18px;
-        }
+.wallpaper-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
 
-        @media (min-width: 600px) {
-            .app {
-                padding-top: 40px;
-            }
-        }
-    </style>
+/* MOTION */
+
+.motion {
+    animation: slowZoom 8s ease-in-out infinite alternate;
+}
+
+@keyframes slowZoom {
+
+    from {
+        transform: scale(1);
+    }
+
+    to {
+        transform: scale(1.08);
+    }
+
+}
+
+.wallpaper-info {
+    padding: 15px;
+}
+
+.wallpaper-title {
+    font-size: 17px;
+    font-weight: 800;
+    margin-bottom: 12px;
+}
+
+.buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+}
+
+.wall-btn {
+    padding: 12px 8px;
+    border-radius: 12px;
+    border: 1px solid #292c3a;
+    background: #1a1c27;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.wall-btn.live {
+    background: linear-gradient(135deg, #ff4f91, #9657ff);
+    border: none;
+}
+
+.download {
+    width: 100%;
+    margin-top: 9px;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: white;
+    color: #08090f;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* LIVE VIEW */
+
+.live-view {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: black;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+.live-view img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: liveMotion 7s ease-in-out infinite alternate;
+}
+
+@keyframes liveMotion {
+
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1.10) translateX(-1%);
+    }
+
+}
+
+.live-controls {
+    position: absolute;
+    bottom: 25px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.live-controls button {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    font-weight: 800;
+}
+
+.close-btn {
+    background: #222530;
+    color: white;
+}
+
+.set-live-btn {
+    background: linear-gradient(135deg, #ff4f91, #9657ff);
+    color: white;
+}
+
+/* EMPTY */
+
+.empty {
+    text-align: center;
+    padding: 45px 20px;
+    color: #666b7c;
+}
+
+.empty-icon {
+    font-size: 45px;
+    margin-bottom: 10px;
+}
+
+/* ADMIN BUTTON */
+
+.admin-toggle {
+    text-align: center;
+    margin-top: 25px;
+}
+
+.admin-toggle button {
+    background: transparent;
+    border: 1px solid #292c3a;
+    color: #777;
+    border-radius: 20px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.status {
+    text-align: center;
+    color: #888;
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+</style>
 </head>
 
 <body>
 
 <div class="app">
 
+    <!-- HEADER -->
+
     <div class="header">
-        <div class="logo">Anime<span>Wall</span></div>
-        <div class="badge">AI WALLPAPER</div>
+
+        <div class="logo">
+            Anime<span>Wall</span>
+        </div>
+
+        <div class="badge">
+            WALLPAPER
+        </div>
+
     </div>
+
+
+    <!-- HERO -->
 
     <div class="hero">
-        <h1>Create Your <span>Anime</span> Wallpaper</h1>
+
+        <h1>
+            Anime <span>Wallpapers</span>
+        </h1>
+
         <p>
-            Describe anything you imagine and create a beautiful
-            mobile wallpaper with AI.
+            Beautiful anime wallpapers with cinematic motion.
         </p>
+
     </div>
 
-    <div class="card">
 
-        <div class="label">✨ Describe your wallpaper</div>
+    <!-- ADMIN -->
 
-        <textarea
-            id="prompt"
-            placeholder="Example: A samurai standing under a full moon, Japanese village, cinematic anime style, 4K..."
-        ></textarea>
+    <div class="section admin-box" id="adminBox">
 
-        <button class="generate" onclick="generateWallpaper()">
-            ✨ Generate Wallpaper
+        <div class="section-title">
+            👑 Admin Upload
+        </div>
+
+        <input
+            type="text"
+            id="wallpaperTitle"
+            placeholder="Wallpaper title"
+        >
+
+        <input
+            type="file"
+            id="wallpaperFile"
+            accept="image/*"
+        >
+
+        <button
+            class="primary-btn"
+            onclick="uploadWallpaper()"
+        >
+            📤 Publish Wallpaper
         </button>
 
-        <div class="status" id="status"></div>
+        <div
+            class="status"
+            id="adminStatus"
+        ></div>
 
     </div>
 
-    <div class="card">
 
-        <div class="label">🖼️ Preview</div>
+    <!-- WALLPAPERS -->
 
-        <div class="preview">
+    <div class="section">
 
-            <div class="preview-text" id="previewText">
-                <div class="icon">🌌</div>
-                <div>Your generated wallpaper will appear here</div>
+        <div class="section-title">
+            🔥 Latest Wallpapers
+        </div>
+
+        <div id="wallpaperList">
+
+            <div class="empty">
+
+                <div class="empty-icon">
+                    🖼️
+                </div>
+
+                No wallpapers yet.
+
             </div>
 
-            <img id="wallpaper" alt="Generated Wallpaper">
-
         </div>
 
-        <div class="buttons">
+    </div>
 
-            <button class="wall-btn" onclick="setWallpaper('home')">
-                🏠 Home Screen
-            </button>
 
-            <button class="wall-btn" onclick="setWallpaper('lock')">
-                🔒 Lock Screen
-            </button>
+    <!-- ADMIN TOGGLE -->
 
-            <button class="wall-btn" onclick="setWallpaper('both')">
-                🏠🔒 Both
-            </button>
+    <div class="admin-toggle">
 
-            <button class="wall-btn" onclick="downloadWallpaper()">
-                📥 Download
-            </button>
-
-        </div>
+        <button onclick="toggleAdmin()">
+            Admin Panel
+        </button>
 
     </div>
 
 </div>
 
+
+<!-- LIVE VIEW -->
+
+<div
+    class="live-view"
+    id="liveView"
+>
+
+    <img
+        id="liveImage"
+        src=""
+        alt="Live Wallpaper"
+    >
+
+    <div class="live-controls">
+
+        <button
+            class="close-btn"
+            onclick="closeLive()"
+        >
+            ✕ Close
+        </button>
+
+        <button
+            class="set-live-btn"
+            onclick="setLiveWallpaper()"
+        >
+            ✨ Set Live Wallpaper
+        </button>
+
+    </div>
+
+</div>
+
+
 <script>
 
-async function generateWallpaper() {
+/* =========================
+   WALLPAPER STORAGE
+========================= */
 
-    const prompt = document.getElementById("prompt").value.trim();
-    const status = document.getElementById("status");
-    const button = document.querySelector(".generate");
-    const image = document.getElementById("wallpaper");
-    const previewText = document.getElementById("previewText");
+let wallpapers =
+    JSON.parse(
+        localStorage.getItem("animeWallpapers") || "[]"
+    );
 
-    if (!prompt) {
-        status.innerText = "⚠️ First describe your wallpaper.";
+
+/* =========================
+   SHOW WALLPAPERS
+========================= */
+
+function renderWallpapers() {
+
+    const list =
+        document.getElementById("wallpaperList");
+
+    if (wallpapers.length === 0) {
+
+        list.innerHTML = `
+            <div class="empty">
+
+                <div class="empty-icon">
+                    🖼️
+                </div>
+
+                No wallpapers yet.
+
+            </div>
+        `;
+
         return;
     }
 
-    button.disabled = true;
-    button.innerText = "✨ Creating Wallpaper...";
-    status.innerText = "🤖 AI is creating your wallpaper...";
 
-    try {
+    list.innerHTML = "";
 
-        const response = await fetch("/api/generate", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                prompt: prompt
-            })
-        });
 
-        const data = await response.json();
+    wallpapers.forEach((wallpaper, index) => {
 
-        if (!response.ok) {
-            throw new Error(data.error || "Generation failed");
-        }
+        const card =
+            document.createElement("div");
 
-        image.src = data.image;
-        image.style.display = "block";
-        previewText.style.display = "none";
+        card.className =
+            "wallpaper-card";
 
-        status.innerText = "✅ Wallpaper created successfully!";
 
-    } catch (error) {
+        card.innerHTML = `
 
-        console.error(error);
+            <div class="wallpaper-preview">
 
-        status.innerText =
-            "❌ " + (error.message || "Something went wrong.");
+                <img
+                    src="${wallpaper.image}"
+                    alt="${wallpaper.title}"
+                >
 
-    } finally {
+            </div>
 
-        button.disabled = false;
-        button.innerText = "✨ Generate Wallpaper";
-    }
+
+            <div class="wallpaper-info">
+
+                <div class="wallpaper-title">
+                    ${wallpaper.title}
+                </div>
+
+
+                <div class="buttons">
+
+                    <button
+                        class="wall-btn"
+                        onclick="setNormal(${index}, 'home')"
+                    >
+                        🏠 Home
+                    </button>
+
+                    <button
+                        class="wall-btn"
+                        onclick="setNormal(${index}, 'lock')"
+                    >
+                        🔒 Lock
+                    </button>
+
+                    <button
+                        class="wall-btn"
+                        onclick="setNormal(${index}, 'both')"
+                    >
+                        🏠🔒 Both
+                    </button>
+
+                    <button
+                        class="wall-btn live"
+                        onclick="openLive(${index})"
+                    >
+                        ✨ LIVE
+                    </button>
+
+                </div>
+
+
+                <button
+                    class="download"
+                    onclick="downloadWallpaper(${index})"
+                >
+                    ⬇️ Download Wallpaper
+                </button>
+
+            </div>
+
+        `;
+
+
+        list.appendChild(card);
+
+    });
+
 }
 
 
-function setWallpaper(type) {
+/* =========================
+   ADMIN PANEL
+========================= */
 
-    const image = document.getElementById("wallpaper");
+function toggleAdmin() {
 
-    if (!image.src || image.style.display === "none") {
-        alert("Generate a wallpaper first.");
-        return;
-    }
+    const box =
+        document.getElementById("adminBox");
 
-    if (type === "home") {
+    if (box.style.display === "block") {
 
-        alert(
-            "🏠 Home Screen\n\n" +
-            "Android app version-il direct wallpaper setting add cheyyum."
-        );
-
-    } else if (type === "lock") {
-
-        alert(
-            "🔒 Lock Screen\n\n" +
-            "Android app version-il direct wallpaper setting add cheyyum."
-        );
+        box.style.display = "none";
 
     } else {
 
-        alert(
-            "🏠🔒 Both Screens\n\n" +
-            "Android app version-il direct wallpaper setting add cheyyum."
-        );
+        box.style.display = "block";
+
     }
+
 }
 
 
-function downloadWallpaper() {
+/* =========================
+   UPLOAD
+========================= */
 
-    const image = document.getElementById("wallpaper");
+function uploadWallpaper() {
 
-    if (!image.src || image.style.display === "none") {
-        alert("Generate a wallpaper first.");
+    const file =
+        document.getElementById("wallpaperFile")
+        .files[0];
+
+    const title =
+        document.getElementById("wallpaperTitle")
+        .value.trim();
+
+    const status =
+        document.getElementById("adminStatus");
+
+
+    if (!file) {
+
+        status.innerText =
+            "❌ Select an image first.";
+
         return;
+
     }
 
-    const link = document.createElement("a");
 
-    link.href = image.src;
-    link.download = "anime-wallpaper.png";
+    if (!title) {
+
+        status.innerText =
+            "❌ Enter wallpaper title.";
+
+        return;
+
+    }
+
+
+    const reader =
+        new FileReader();
+
+
+    reader.onload = function(event) {
+
+        wallpapers.unshift({
+
+            title: title,
+
+            image: event.target.result,
+
+            createdAt: Date.now()
+
+        });
+
+
+        localStorage.setItem(
+            "animeWallpapers",
+            JSON.stringify(wallpapers)
+        );
+
+
+        document.getElementById(
+            "wallpaperTitle"
+        ).value = "";
+
+
+        document.getElementById(
+            "wallpaperFile"
+        ).value = "";
+
+
+        status.innerText =
+            "✅ Wallpaper published!";
+
+
+        renderWallpapers();
+
+    };
+
+
+    reader.readAsDataURL(file);
+
+}
+
+
+/* =========================
+   NORMAL WALLPAPER
+========================= */
+
+function setNormal(index, type) {
+
+    const wallpaper =
+        wallpapers[index];
+
+
+    if (!wallpaper) return;
+
+
+    /*
+       Website cannot directly change
+       Android Home/Lock wallpaper.
+
+       Android APK will connect these
+       buttons to WallpaperManager.
+    */
+
+    alert(
+        "📱 " +
+        type.toUpperCase() +
+        " WALLPAPER\n\n" +
+        "Android app version-il direct wallpaper setting connect cheyyum."
+    );
+
+}
+
+
+/* =========================
+   LIVE PREVIEW
+========================= */
+
+function openLive(index) {
+
+    const wallpaper =
+        wallpapers[index];
+
+
+    if (!wallpaper) return;
+
+
+    const liveView =
+        document.getElementById("liveView");
+
+    const liveImage =
+        document.getElementById("liveImage");
+
+
+    liveImage.src =
+        wallpaper.image;
+
+
+    liveView.style.display =
+        "flex";
+
+}
+
+
+/* =========================
+   CLOSE LIVE
+========================= */
+
+function closeLive() {
+
+    document.getElementById(
+        "liveView"
+    ).style.display = "none";
+
+}
+
+
+/* =========================
+   SET LIVE
+========================= */
+
+function setLiveWallpaper() {
+
+    /*
+       Actual Android Live Wallpaper
+       will be connected later using
+       Android WallpaperService.
+    */
+
+    alert(
+        "✨ Live Wallpaper\n\n" +
+        "Android APK version-il ee motion wallpaper direct Live Wallpaper aayi set cheyyum."
+    );
+
+}
+
+
+/* =========================
+   DOWNLOAD
+========================= */
+
+function downloadWallpaper(index) {
+
+    const wallpaper =
+        wallpapers[index];
+
+
+    if (!wallpaper) return;
+
+
+    const link =
+        document.createElement("a");
+
+
+    link.href =
+        wallpaper.image;
+
+
+    link.download =
+        wallpaper.title
+            .replace(/[^a-z0-9]/gi, "-")
+            .toLowerCase() +
+        ".jpg";
+
 
     document.body.appendChild(link);
+
     link.click();
+
     document.body.removeChild(link);
+
 }
 
-    </script>
+
+/* =========================
+   START
+========================= */
+
+renderWallpapers();
+
+</script>
 
 </body>
-</html>
+        </html>
