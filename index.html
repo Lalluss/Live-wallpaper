@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnimeWall AI</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #08090f;
+            color: white;
+            min-height: 100vh;
+        }
+
+        .app {
+            width: 100%;
+            max-width: 500px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .logo span {
+            color: #ff5c8a;
+        }
+
+        .badge {
+            background: #171923;
+            border: 1px solid #292c3a;
+            padding: 7px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .hero h1 {
+            font-size: 34px;
+            line-height: 1.15;
+            margin-bottom: 12px;
+        }
+
+        .hero h1 span {
+            color: #ff5c8a;
+        }
+
+        .hero p {
+            color: #9296a8;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .card {
+            background: #11131c;
+            border: 1px solid #242735;
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+
+        .label {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 130px;
+            resize: none;
+            background: #090a10;
+            border: 1px solid #292c3a;
+            border-radius: 14px;
+            padding: 15px;
+            color: white;
+            font-size: 15px;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #ff5c8a;
+        }
+
+        textarea::placeholder {
+            color: #666b7c;
+        }
+
+        .generate {
+            width: 100%;
+            margin-top: 14px;
+            border: none;
+            border-radius: 14px;
+            padding: 15px;
+            background: linear-gradient(135deg, #ff5c8a, #9b5cff);
+            color: white;
+            font-size: 16px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .generate:active {
+            transform: scale(0.98);
+        }
+
+        .preview {
+            width: 100%;
+            aspect-ratio: 9 / 16;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #151827, #0b0c12);
+            border: 1px solid #292c3a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .preview-text {
+            text-align: center;
+            color: #626778;
+            padding: 30px;
+        }
+
+        .preview-text .icon {
+            font-size: 45px;
+            margin-bottom: 12px;
+        }
+
+        .preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .wall-btn {
+            padding: 13px 8px;
+            border-radius: 12px;
+            border: 1px solid #292c3a;
+            background: #171923;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .wall-btn:hover {
+            border-color: #ff5c8a;
+        }
+
+        .download {
+            width: 100%;
+            margin-top: 10px;
+            padding: 13px;
+            border: none;
+            border-radius: 12px;
+            background: white;
+            color: #08090f;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .status {
+            text-align: center;
+            color: #85899a;
+            font-size: 12px;
+            margin-top: 15px;
+            min-height: 18px;
+        }
+
+        @media (min-width: 600px) {
+            .app {
+                padding-top: 40px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <div class="header">
+        <div class="logo">Anime<span>Wall</span></div>
+        <div class="badge">AI WALLPAPER</div>
+    </div>
+
+    <div class="hero">
+        <h1>Create Your <span>Anime</span> Wallpaper</h1>
+        <p>
+            Describe anything you imagine and create a beautiful
+            mobile wallpaper with AI.
+        </p>
+    </div>
+
+    <div class="card">
+
+        <div class="label">✨ Describe your wallpaper</div>
+
+        <textarea
+            id="prompt"
+            placeholder="Example: A samurai standing under a full moon, Japanese village, cinematic anime style, 4K..."
+        ></textarea>
+
+        <button class="generate" onclick="generateWallpaper()">
+            ✨ Generate Wallpaper
+        </button>
+
+        <div class="status" id="status"></div>
+
+    </div>
+
+    <div class="card">
+
+        <div class="label">🖼️ Preview</div>
+
+        <div class="preview">
+
+            <div class="preview-text" id="previewText">
+                <div class="icon">🌌</div>
+                <div>Your generated wallpaper will appear here</div>
+            </div>
+
+            <img id="wallpaper" alt="Generated Wallpaper">
+
+        </div>
+
+        <div class="buttons">
+
+            <button class="wall-btn" onclick="setWallpaper('home')">
+                🏠 Home Screen
+            </button>
+
+            <button class="wall-btn" onclick="setWallpaper('lock')">
+                🔒 Lock Screen
+            </button>
+
+            <button class="wall-btn" onclick="setWallpaper('both')">
+                🏠🔒 Both
+            </button>
+
+            <button class="wall-btn" onclick="downloadWallpaper()">
+                📥 Download
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+function generateWallpaper() {
+
+    const prompt = document.getElementById("prompt").value.trim();
+    const status = document.getElementById("status");
+
+    if (!prompt) {
+        status.innerText = "⚠️ First describe your wallpaper.";
+        return;
+    }
+
+    status.innerText = "✨ AI wallpaper generation will be connected here...";
+
+    /*
+       AI API will be connected in the next step.
+
+       We are NOT putting an API key inside this HTML file.
+       The request will go through our secure backend.
+    */
+}
+
+function setWallpaper(type) {
+
+    const image = document.getElementById("wallpaper");
+
+    if (!image.src || image.style.display === "none") {
+        alert("Generate a wallpaper first.");
+        return;
+    }
+
+    alert(
+        type === "home"
+        ? "🏠 Home Screen setting will be connected in the Android app."
+        : type === "lock"
+        ? "🔒 Lock Screen setting will be connected in the Android app."
+        : "🏠🔒 Both screens setting will be connected in the Android app."
+    );
+}
+
+function downloadWallpaper() {
+
+    const image = document.getElementById("wallpaper");
+
+    if (!image.src || image.style.display === "none") {
+        alert("Generate a wallpaper first.");
+        return;
+    }
+
+    const link = document.createElement("a");
+    link.href = image.src;
+    link.download = "anime-wallpaper.jpg";
+    link.click();
+}
+
+</script>
+
+</body>
+</html>
