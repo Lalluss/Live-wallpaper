@@ -73,7 +73,7 @@ public class LiveWallpaperService extends WallpaperService {
         private void createWebView() {
 
             webView = new WebView(
-                    AnimeWallApplication.getContext()
+                    LiveWallpaperService.this
             );
 
             WebSettings settings =
