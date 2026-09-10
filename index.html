@@ -523,9 +523,7 @@ function renderWallpapers() {
         return;
     }
 
-
     list.innerHTML = "";
-
 
     wallpapers.forEach(
         (wallpaper, index) => {
@@ -536,6 +534,25 @@ function renderWallpapers() {
             card.className =
                 "wallpaper-card";
 
+            const adminButtons = isAdmin ? `
+                <div class="admin-actions">
+
+                    <button
+                        class="admin-edit-btn"
+                        onclick="editWallpaper(${index})"
+                    >
+                        ✏️ Edit
+                    </button>
+
+                    <button
+                        class="admin-delete-btn"
+                        onclick="deleteWallpaper(${index})"
+                    >
+                        🗑️ Delete
+                    </button>
+
+                </div>
+            ` : "";
 
             card.innerHTML = `
 
@@ -599,16 +616,17 @@ function renderWallpapers() {
                         ⬇️ Download Wallpaper
                     </button>
 
+
+                    ${adminButtons}
+
                 </div>
 
             `;
-
 
             list.appendChild(card);
 
         }
     );
-
 }
 
 
