@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+}
+
+.scene {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Main wallpaper */
+.wallpaper {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+
+    animation: breathe 10s ease-in-out infinite;
+}
+
+/* Very subtle whole-scene breathing */
+@keyframes breathe {
+
+    0%, 100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.006);
+    }
+}
+
+
+/* =========================
+   ATMOSPHERE
+   ========================= */
+
+.atmosphere {
+    position: absolute;
+    inset: -10%;
+    pointer-events: none;
+
+    background:
+        radial-gradient(
+            circle at 50% 45%,
+            rgba(255, 180, 60, 0.08),
+            transparent 38%
+        );
+
+    animation: atmosphereMove 8s ease-in-out infinite;
+}
+
+@keyframes atmosphereMove {
+
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.65;
+    }
+
+    50% {
+        transform: scale(1.04);
+        opacity: 1;
+    }
+}
+
+
+/* =========================
+   GOLDEN LIGHT
+   ========================= */
+
+.glow {
+    position: absolute;
+
+    left: 50%;
+    top: 58%;
+
+    width: 55vw;
+    height: 55vw;
+
+    transform: translate(-50%, -50%);
+
+    border-radius: 50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(255, 190, 40, 0.16),
+            rgba(255, 130, 0, 0.05) 45%,
+            transparent 70%
+        );
+
+    filter: blur(18px);
+
+    animation: glowPulse 3.5s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+
+    0%, 100% {
+        opacity: 0.55;
+        transform:
+            translate(-50%, -50%)
+            scale(0.96);
+    }
+
+    50% {
+        opacity: 0.95;
+        transform:
+            translate(-50%, -50%)
+            scale(1.04);
+    }
+}
+
+
+/* =========================
+   RED ATMOSPHERIC LIGHT
+   ========================= */
+
+.redLight {
+    position: absolute;
+
+    left: -20%;
+    top: 5%;
+
+    width: 140%;
+    height: 55%;
+
+    background:
+        radial-gradient(
+            ellipse,
+            rgba(255, 20, 20, 0.08),
+            transparent 65%
+        );
+
+    filter: blur(25px);
+
+    animation: redMove 12s ease-in-out infinite;
+}
+
+@keyframes redMove {
+
+    0%, 100% {
+        transform: translateX(-1%);
+    }
+
+    50% {
+        transform: translateX(1%);
+    }
+}
+
+
+/* =========================
+   FLOATING LIGHT PARTICLES
+   ========================= */
+
+.particle {
+    position: absolute;
+
+    width: 3px;
+    height: 3px;
+
+    border-radius: 50%;
+
+    background: rgba(255, 210, 100, 0.8);
+
+    box-shadow:
+        0 0 8px rgba(255, 180, 40, 0.8);
+
+    animation:
+        floatParticle var(--duration)
+        ease-in-out infinite;
+
+    opacity: var(--opacity);
+}
+
+@keyframes floatParticle {
+
+    0% {
+        transform:
+            translate3d(0, 0, 0);
+    }
+
+    50% {
+        transform:
+            translate3d(
+                var(--moveX),
+                var(--moveY),
+                0
+            );
+    }
+
+    100% {
+        transform:
+            translate3d(0, 0, 0);
+    }
+}
+
+</style>
+</head>
+
+
+<body>
+
+<div class="scene">
+
+    <!-- Wallpaper -->
+    <img
+        id="wallpaper"
+        class="wallpaper"
+        src=""
+        alt=""
+    >
+
+    <!-- Atmospheric movement -->
+    <div class="redLight"></div>
+
+    <div class="atmosphere"></div>
+
+    <!-- Golden glow -->
+    <div class="glow"></div>
+
+</div>
+
+
+<script>
+
+/*
+    Wallpaper URL will be supplied
+    by Android later.
+*/
+
+const params =
+    new URLSearchParams(window.location.search);
+
+const image =
+    params.get("image");
+
+if (image) {
+
+    document.getElementById("wallpaper").src =
+        image;
+}
+
+
+/*
+    Create subtle floating particles.
+*/
+
+const scene =
+    document.querySelector(".scene");
+
+for (let i = 0; i < 28; i++) {
+
+    const particle =
+        document.createElement("div");
+
+    particle.className =
+        "particle";
+
+    particle.style.left =
+        Math.random() * 100 + "%";
+
+    particle.style.top =
+        Math.random() * 100 + "%";
+
+    particle.style.setProperty(
+        "--duration",
+        (4 + Math.random() * 6) + "s"
+    );
+
+    particle.style.setProperty(
+        "--moveX",
+        (-12 + Math.random() * 24) + "px"
+    );
+
+    particle.style.setProperty(
+        "--moveY",
+        (-18 + Math.random() * 36) + "px"
+    );
+
+    particle.style.setProperty(
+        "--opacity",
+        (0.2 + Math.random() * 0.7)
+    );
+
+    scene.appendChild(particle);
+}
+
+
+/*
+    Keep JavaScript animation alive.
+*/
+
+let time = 0;
+
+function animationLoop() {
+
+    time += 0.016;
+
+    requestAnimationFrame(animationLoop);
+}
+
+animationLoop();
+
+</script>
+
+</body>
+  </html>
