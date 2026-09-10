@@ -686,6 +686,40 @@ async function toggleAdmin() {
 
     }
     }
+
+async function logoutAdmin() {
+
+    try {
+
+        const response = await fetch(
+            "/api/admin-logout",
+            {
+                method: "POST"
+            }
+        );
+
+        const data = await response.json();
+
+        if (data.success) {
+
+            document.getElementById("adminBox").style.display = "none";
+
+            alert("🚪 Admin logged out successfully!");
+
+        } else {
+
+            alert("❌ Logout failed.");
+
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert("❌ Logout failed. Please try again.");
+
+    }
+}
 /* =========================
    UPLOAD WALLPAPER
 ========================= */
