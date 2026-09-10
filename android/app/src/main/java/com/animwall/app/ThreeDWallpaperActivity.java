@@ -5,6 +5,10 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.View;
@@ -15,15 +19,28 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-public class ThreeDWallpaperActivity extends Activity {
+public class ThreeDWallpaperActivity extends Activity
+        implements SensorEventListener {
 
     private ThreeDView threeDView;
 
+    private SensorManager sensorManager;
+    private Sensor gyroscope;
+
+    private float sensorX = 0f;
+    private float sensorY = 0f;
+
+    private float smoothSensorX = 0f;
+    private float smoothSensorY = 0f;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
 
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        requestWindowFeature(
+                Window.FEATURE_NO_TITLE
+        );
 
         getWindow().setFlags(
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -37,31 +54,143 @@ public class ThreeDWallpaperActivity extends Activity {
                 new ThreeDView(imageUrl);
 
         setContentView(threeDView);
+
+        /*
+         * ==========================================
+         * GYROSCOPE
+         * ==========================================
+         */
+
+        sensorManager =
+                (SensorManager)
+                        getSystemService(
+                                SENSOR_SERVICE
+                        );
+
+        gyroscope =
+                sensorManager.getDefaultSensor(
+                        Sensor.TYPE_GYROSCOPE
+                );
     }
+
+    @Override
+    protected void onResume() {
+
+        super.onResume();
+
+        if (gyroscope != null) {
+
+            sensorManager.registerListener(
+                    this,
+                    gyroscope,
+                    SensorManager.SENSOR_DELAY_GAME
+            );
+        }
+    }
+
+    @Override
+    protected void onPause() {
+
+        super.onPause();
+
+        if (sensorManager != null) {
+
+            sensorManager.unregisterListener(
+                    this
+            );
+        }
+    }
+
+    /*
+     * ==========================================
+     * SENSOR DATA
+     * ==========================================
+     */
+
+    @Override
+    public void onSensorChanged(
+            SensorEvent event
+    ) {
+
+        if (event.sensor.getType()
+                != Sensor.TYPE_GYROSCOPE) {
+
+            return;
+        }
+
+        /*
+         * Gyroscope values.
+         *
+         * We deliberately keep movement
+         * very small for a 3D illusion.
+         */
+
+        sensorX =
+                event.values[1];
+
+        sensorY =
+                event.values[0];
+
+        /*
+         * Smooth the sensor movement.
+         */
+
+        smoothSensorX +=
+                (sensorX - smoothSensorX)
+                        * 0.08f;
+
+        smoothSensorY +=
+                (sensorY - smoothSensorY)
+                        * 0.08f;
+
+        if (threeDView != null) {
+
+            threeDView.setSensorMovement(
+                    smoothSensorX,
+                    smoothSensorY
+            );
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(
+            Sensor sensor,
+            int accuracy
+    ) {
+        // Not required.
+    }
+
+
+    /*
+     * ==========================================
+     * 3D VIEW
+     * ==========================================
+     */
 
     private class ThreeDView extends View {
 
         private Bitmap bitmap;
 
         private final Paint paint =
-                new Paint(Paint.ANTI_ALIAS_FLAG |
-                        Paint.FILTER_BITMAP_FLAG);
+                new Paint(
+                        Paint.ANTI_ALIAS_FLAG |
+                        Paint.FILTER_BITMAP_FLAG
+                );
 
-        private float targetX = 0;
-        private float targetY = 0;
+        private float targetX = 0f;
+        private float targetY = 0f;
 
-        private float currentX = 0;
-        private float currentY = 0;
+        private float currentX = 0f;
+        private float currentY = 0f;
 
-        private float lastTouchX;
-        private float lastTouchY;
-
-        private boolean touching = false;
-
-        private long lastTime;
+        private float touchX = 0f;
+        private float touchY = 0f;
 
         ThreeDView(String imageUrl) {
-            super(ThreeDWallpaperActivity.this);
+
+            super(
+                    ThreeDWallpaperActivity.this
+            );
 
             setLayerType(
                     View.LAYER_TYPE_HARDWARE,
@@ -71,16 +200,27 @@ public class ThreeDWallpaperActivity extends Activity {
             loadImage(imageUrl);
         }
 
-        private void loadImage(String imageUrl) {
+        /*
+         * ==========================================
+         * LOAD IMAGE
+         * ==========================================
+         */
 
-            if (imageUrl == null ||
-                    imageUrl.isEmpty()) {
+        private void loadImage(
+                String imageUrl
+        ) {
+
+            if (
+                    imageUrl == null ||
+                    imageUrl.isEmpty()
+            ) {
                 return;
             }
 
             new Thread(() -> {
 
-                HttpURLConnection connection = null;
+                HttpURLConnection connection =
+                        null;
 
                 try {
 
@@ -91,20 +231,25 @@ public class ThreeDWallpaperActivity extends Activity {
                             (HttpURLConnection)
                                     url.openConnection();
 
-                    connection.setConnectTimeout(15000);
-                    connection.setReadTimeout(15000);
+                    connection.setConnectTimeout(
+                            15000
+                    );
+
+                    connection.setReadTimeout(
+                            15000
+                    );
 
                     InputStream input =
                             connection.getInputStream();
 
                     Bitmap loaded =
-                            BitmapFactory.decodeStream(input);
+                            BitmapFactory.decodeStream(
+                                    input
+                            );
 
                     input.close();
 
-                    if (connection != null) {
-                        connection.disconnect();
-                    }
+                    connection.disconnect();
 
                     bitmap = loaded;
 
@@ -113,25 +258,74 @@ public class ThreeDWallpaperActivity extends Activity {
                 } catch (Exception e) {
 
                     e.printStackTrace();
+
+                } finally {
+
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
                 }
 
             }).start();
         }
 
+        /*
+         * ==========================================
+         * SENSOR MOVEMENT
+         * ==========================================
+         */
+
+        void setSensorMovement(
+                float x,
+                float y
+        ) {
+
+            /*
+             * Amplify only slightly.
+             */
+
+            targetX =
+                    clamp(
+                            x * 18f,
+                            -28f,
+                            28f
+                    );
+
+            targetY =
+                    clamp(
+                            y * 18f,
+                            -28f,
+                            28f
+                    );
+        }
+
+        /*
+         * ==========================================
+         * DRAW
+         * ==========================================
+         */
+
         @Override
-        protected void onDraw(Canvas canvas) {
+        protected void onDraw(
+                Canvas canvas
+        ) {
 
             super.onDraw(canvas);
 
             if (bitmap == null) {
+
                 canvas.drawColor(
                         android.graphics.Color.BLACK
                 );
+
                 return;
             }
 
-            int width = getWidth();
-            int height = getHeight();
+            int width =
+                    getWidth();
+
+            int height =
+                    getHeight();
 
             float imageWidth =
                     bitmap.getWidth();
@@ -140,7 +334,7 @@ public class ThreeDWallpaperActivity extends Activity {
                     bitmap.getHeight();
 
             /*
-             * Cover screen.
+             * Cover the screen.
              */
 
             float scale =
@@ -156,56 +350,42 @@ public class ThreeDWallpaperActivity extends Activity {
                     imageHeight * scale;
 
             /*
-             * Center image.
+             * Slight enlargement prevents
+             * black edges during movement.
              */
 
-            float baseLeft =
-                    (width - drawWidth) / 2f;
+            float zoom =
+                    1.045f;
 
-            float baseTop =
-                    (height - drawHeight) / 2f;
+            float finalWidth =
+                    drawWidth * zoom;
+
+            float finalHeight =
+                    drawHeight * zoom;
 
             /*
              * Smooth movement.
              */
 
             currentX +=
-                    (targetX - currentX) * 0.08f;
+                    (targetX - currentX)
+                            * 0.07f;
 
             currentY +=
-                    (targetY - currentY) * 0.08f;
+                    (targetY - currentY)
+                            * 0.07f;
 
             /*
-             * Small depth effect.
+             * Center + 3D movement.
              */
-
-            float movementX =
-                    currentX * 1.0f;
-
-            float movementY =
-                    currentY * 1.0f;
-
-            /*
-             * Draw slightly enlarged image
-             * so edges don't become visible.
-             */
-
-            float extra =
-                    1.035f;
-
-            float finalWidth =
-                    drawWidth * extra;
-
-            float finalHeight =
-                    drawHeight * extra;
 
             float left =
                     (width - finalWidth) / 2f
-                    + movementX;
+                    + currentX;
 
             float top =
                     (height - finalHeight) / 2f
-                    + movementY;
+                    + currentY;
 
             canvas.drawBitmap(
                     bitmap,
@@ -220,30 +400,37 @@ public class ThreeDWallpaperActivity extends Activity {
             );
 
             /*
-             * Continue animation.
+             * Keep rendering smoothly.
              */
 
             postInvalidateDelayed(16);
         }
+
+        /*
+         * ==========================================
+         * TOUCH
+         * ==========================================
+         */
 
         @Override
         public boolean onTouchEvent(
                 MotionEvent event
         ) {
 
-            switch (event.getActionMasked()) {
+            switch (
+                    event.getActionMasked()
+            ) {
 
                 case MotionEvent.ACTION_DOWN:
 
-                    touching = true;
-
-                    lastTouchX =
+                    touchX =
                             event.getX();
 
-                    lastTouchY =
+                    touchY =
                             event.getY();
 
                     return true;
+
 
                 case MotionEvent.ACTION_MOVE:
 
@@ -254,10 +441,10 @@ public class ThreeDWallpaperActivity extends Activity {
                             event.getY();
 
                     float dx =
-                            x - lastTouchX;
+                            x - touchX;
 
                     float dy =
-                            y - lastTouchY;
+                            y - touchY;
 
                     targetX +=
                             dx * 0.12f;
@@ -265,49 +452,61 @@ public class ThreeDWallpaperActivity extends Activity {
                     targetY +=
                             dy * 0.12f;
 
-                    /*
-                     * Limit movement.
-                     */
-
                     targetX =
-                            Math.max(
-                                    -35,
-                                    Math.min(
-                                            35,
-                                            targetX
-                                    )
+                            clamp(
+                                    targetX,
+                                    -35f,
+                                    35f
                             );
 
                     targetY =
-                            Math.max(
-                                    -35,
-                                    Math.min(
-                                            35,
-                                            targetY
-                                    )
+                            clamp(
+                                    targetY,
+                                    -35f,
+                                    35f
                             );
 
-                    lastTouchX = x;
-                    lastTouchY = y;
+                    touchX = x;
+                    touchY = y;
 
                     return true;
+
 
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
 
-                    touching = false;
-
                     /*
-                     * Slowly return to center.
+                     * Return smoothly to center.
                      */
 
-                    targetX = 0;
-                    targetY = 0;
+                    targetX = 0f;
+                    targetY = 0f;
 
                     return true;
             }
 
             return true;
         }
+
+        /*
+         * ==========================================
+         * CLAMP
+         * ==========================================
+         */
+
+        private float clamp(
+                float value,
+                float min,
+                float max
+        ) {
+
+            return Math.max(
+                    min,
+                    Math.min(
+                            max,
+                            value
+                    )
+            );
+        }
     }
-      }
+}
