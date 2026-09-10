@@ -623,7 +623,35 @@ public class MainActivity extends Activity {
      * MESSAGE
      * ==========================================
      */
+    private void open3DWallpaper(String imageUrl) {
 
+    try {
+
+        Intent intent =
+                new Intent(
+                        this,
+                        ThreeDWallpaperActivity.class
+                );
+
+        intent.putExtra(
+                "image_url",
+                imageUrl
+        );
+
+        startActivity(intent);
+
+    } catch (Exception e) {
+
+        e.printStackTrace();
+
+        Toast.makeText(
+                this,
+                "❌ 3D Wallpaper failed",
+                Toast.LENGTH_LONG
+        ).show();
+    }
+    }
+    
     private void showMessage(
             String message
     ) {
