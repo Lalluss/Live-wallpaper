@@ -1,3 +1,16 @@
+import crypto from "crypto";
+
+function createToken() {
+  const timestamp = Date.now().toString();
+
+  const signature = crypto
+    .createHmac("sha256", process.env.ADMIN_PASSWORD)
+    .update(timestamp)
+    .digest("hex");
+
+  return `${timestamp}.${signature}`;
+}
+
 export default async function handler(req, res) {
 
   if (req.method !== "POST") {
@@ -21,6 +34,13 @@ export default async function handler(req, res) {
         error: "Wrong password"
       });
     }
+
+    const token = createToken();
+
+    res.setHeader(
+      "Set-Cookie",
+      `admin_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`
+    );
 
     return res.status(200).json({
       success: true
