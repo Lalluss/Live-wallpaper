@@ -613,22 +613,88 @@ function escapeHtml(value) {
    ADMIN PANEL
 ========================= */
 
-function toggleAdmin() {
+async function toggleAdmin() {
 
-    const box =
-        document.getElementById("adminBox");
+    const box = document.getElementById("adminBox");
 
+    // Already logged in
+    if (document.cookie.includes("admin_session=")) {
 
-    if (box.style.display === "block") {
+        if (box.style.display === "block") {
+            box.style.display = "none";
+        } else {
+            box.style.display = "block";
+        }
 
-        box.style.display = "none";
-
-    } else {
-
-        box.style.display = "block";
-
+        return;
     }
 
+
+    // Ask for admin password
+    const password = prompt(
+        "🔐 Enter Admin Password"
+    );
+
+
+    if (!password) {
+        return;
+    }
+
+
+    try {
+
+        const response = await fetch(
+            "/api/admin-login",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    password: password
+                })
+            }
+        );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            alert(
+                "❌ " +
+                (data.error ||
+                    "Wrong password")
+            );
+
+            return;
+        }
+
+
+        if (data.success) {
+
+            box.style.display = "block";
+
+            alert(
+                "✅ Admin login successful!"
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "❌ Login failed. Please try again."
+        );
+
+    }
 }
 
 /* =========================
