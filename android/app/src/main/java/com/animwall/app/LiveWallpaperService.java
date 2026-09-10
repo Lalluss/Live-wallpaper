@@ -1,8 +1,10 @@
 package com.animwall.app;
 
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
@@ -14,64 +16,78 @@ import java.net.URL;
 
 public class LiveWallpaperService extends WallpaperService {
 
+    private static final String PREFS_NAME =
+            "AnimeWallPrefs";
+
+    private static final String LIVE_WALLPAPER_URL =
+            "live_wallpaper_url";
+
+
     @Override
     public Engine onCreateEngine() {
         return new LiveEngine();
     }
 
+
     private class LiveEngine extends Engine {
 
-        private final Handler handler = new Handler();
+        private final Handler handler =
+                new Handler();
 
-        private final Paint paint = new Paint(
-            Paint.ANTI_ALIAS_FLAG
-        );
+        private final Paint paint =
+                new Paint(Paint.ANTI_ALIAS_FLAG);
 
         private Bitmap bitmap;
 
         private boolean visible = false;
 
-        private float offset = 0f;
+        private float animationOffset = 0f;
+
 
         private final Runnable drawRunnable =
-            new Runnable() {
+                new Runnable() {
 
-                @Override
-                public void run() {
+                    @Override
+                    public void run() {
 
-                    drawFrame();
+                        drawFrame();
 
-                    if (visible) {
-                        handler.postDelayed(
-                            this,
-                            40
-                        );
+                        if (visible) {
+
+                            handler.postDelayed(
+                                    this,
+                                    40
+                            );
+                        }
                     }
-                }
-            };
+                };
 
 
         @Override
         public void onVisibilityChanged(
-            boolean visible
+                boolean visible
         ) {
 
             this.visible = visible;
 
             if (visible) {
 
-                loadWallpaper();
+                if (bitmap == null) {
+                    loadWallpaper();
+                }
 
                 handler.removeCallbacks(
-                    drawRunnable
+                        drawRunnable
                 );
 
-                handler.post(drawRunnable);
+                handler.post(
+                        drawRunnable
+                );
 
             } else {
 
                 handler.removeCallbacks(
-                    drawRunnable
+                        drawRunnable
                 );
             }
         }
@@ -79,7 +95,7 @@ public class LiveWallpaperService extends WallpaperService {
 
         @Override
         public void onSurfaceCreated(
-            SurfaceHolder holder
+                SurfaceHolder holder
         ) {
 
             super.onSurfaceCreated(holder);
@@ -89,8 +105,27 @@ public class LiveWallpaperService extends WallpaperService {
 
 
         @Override
+        public void onSurfaceChanged(
+                SurfaceHolder holder,
+                int format,
+                int width,
+                int height
+        ) {
+
+            super.onSurfaceChanged(
+                    holder,
+                    format,
+                    width,
+                    height
+            );
+
+            drawFrame();
+        }
+
+
+        @Override
         public void onSurfaceDestroyed(
-            SurfaceHolder holder
+                SurfaceHolder holder
         ) {
 
             super.onSurfaceDestroyed(holder);
@@ -98,146 +133,238 @@ public class LiveWallpaperService extends WallpaperService {
             visible = false;
 
             handler.removeCallbacks(
-                drawRunnable
+                    drawRunnable
             );
         }
 
 
+        /*
+         * ==========================================
+         * LOAD SELECTED WALLPAPER
+         * ==========================================
+         */
+
         private void loadWallpaper() {
+
+            SharedPreferences preferences =
+                    getSharedPreferences(
+                            PREFS_NAME,
+                            MODE_PRIVATE
+                    );
+
+
+            String imageUrl =
+                    preferences.getString(
+                            LIVE_WALLPAPER_URL,
+                            ""
+                    );
+
+
+            if (
+                    imageUrl == null ||
+                    imageUrl.isEmpty()
+            ) {
+
+                return;
+            }
+
 
             new Thread(() -> {
 
+                HttpURLConnection connection =
+                        null;
+
                 try {
 
-                    /*
-                     * The selected wallpaper URL
-                     * will be connected here from
-                     * MainActivity in the next step.
-                     */
-
-                    String imageUrl = null;
-
-                    if (imageUrl == null) {
-                        return;
-                    }
-
                     URL url =
-                        new URL(imageUrl);
+                            new URL(imageUrl);
 
-                    HttpURLConnection connection =
-                        (HttpURLConnection)
-                            url.openConnection();
+
+                    connection =
+                            (HttpURLConnection)
+                                    url.openConnection();
+
 
                     connection.setConnectTimeout(
-                        15000
+                            15000
                     );
 
                     connection.setReadTimeout(
-                        15000
+                            15000
                     );
 
-                    InputStream input =
-                        connection.getInputStream();
 
-                    Bitmap newBitmap =
-                        BitmapFactory.decodeStream(
-                            input
-                        );
+                    connection.setUseCaches(false);
+
+
+                    InputStream input =
+                            connection.getInputStream();
+
+
+                    Bitmap downloadedBitmap =
+                            BitmapFactory.decodeStream(
+                                    input
+                            );
+
 
                     input.close();
 
-                    connection.disconnect();
 
-                    bitmap = newBitmap;
+                    if (
+                            downloadedBitmap != null
+                    ) {
+
+                        bitmap =
+                                downloadedBitmap;
+
+
+                        if (visible) {
+
+                            handler.post(
+                                    this::drawFrame
+                            );
+                        }
+                    }
+
 
                 } catch (Exception e) {
 
                     e.printStackTrace();
+
+                } finally {
+
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
                 }
 
             }).start();
         }
 
 
+        /*
+         * ==========================================
+         * DRAW LIVE WALLPAPER
+         * ==========================================
+         */
+
         private void drawFrame() {
 
             SurfaceHolder holder =
-                getSurfaceHolder();
+                    getSurfaceHolder();
+
 
             Canvas canvas = null;
 
+
             try {
 
-                canvas = holder.lockCanvas();
+                canvas =
+                        holder.lockCanvas();
+
 
                 if (canvas == null) {
                     return;
                 }
 
+
                 canvas.drawColor(
-                    android.graphics.Color.BLACK
+                        Color.BLACK
                 );
 
-                if (bitmap != null) {
 
-                    int canvasWidth =
+                if (bitmap == null) {
+                    return;
+                }
+
+
+                int canvasWidth =
                         canvas.getWidth();
 
-                    int canvasHeight =
+                int canvasHeight =
                         canvas.getHeight();
 
-                    float scale =
-                        Math.max(
-                            (float) canvasWidth /
-                                bitmap.getWidth(),
 
-                            (float) canvasHeight /
-                                bitmap.getHeight()
+                int imageWidth =
+                        bitmap.getWidth();
+
+                int imageHeight =
+                        bitmap.getHeight();
+
+
+                /*
+                 * Scale image so it fills
+                 * the complete screen.
+                 */
+
+                float scale =
+                        Math.max(
+                                (float) canvasWidth /
+                                        imageWidth,
+
+                                (float) canvasHeight /
+                                        imageHeight
                         );
 
-                    float imageWidth =
-                        bitmap.getWidth() * scale;
 
-                    float imageHeight =
-                        bitmap.getHeight() * scale;
+                float scaledWidth =
+                        imageWidth * scale;
 
 
-                    /*
-                     * Small movement.
-                     * This is only the base animation.
-                     * Later we will replace this with
-                     * individual object movement.
-                     */
-
-                    offset += 0.15f;
-
-                    if (offset > 20f) {
-                        offset = -20f;
-                    }
+                float scaledHeight =
+                        imageHeight * scale;
 
 
-                    float left =
-                        (canvasWidth - imageWidth) / 2
-                            + offset;
+                /*
+                 * Small smooth movement.
+                 */
 
-                    float top =
-                        (canvasHeight - imageHeight) / 2;
+                animationOffset +=
+                        0.12f;
 
 
-                    canvas.drawBitmap(
-                        bitmap,
-                        left,
-                        top,
-                        paint
-                    );
+                if (
+                        animationOffset > 12f
+                ) {
+
+                    animationOffset = -12f;
                 }
+
+
+                float left =
+                        (canvasWidth -
+                                scaledWidth) / 2f
+                                + animationOffset;
+
+
+                float top =
+                        (canvasHeight -
+                                scaledHeight) / 2f;
+
+
+                canvas.drawBitmap(
+                        bitmap,
+                        null,
+                        new android.graphics.RectF(
+                                left,
+                                top,
+                                left + scaledWidth,
+                                top + scaledHeight
+                        ),
+                        paint
+                );
+
+
+            } catch (Exception e) {
+
+                e.printStackTrace();
 
             } finally {
 
                 if (canvas != null) {
 
                     holder.unlockCanvasAndPost(
-                        canvas
+                            canvas
                     );
                 }
             }
