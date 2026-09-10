@@ -383,7 +383,7 @@ input[type="text"] {
 
     <div class="admin-toggle">
 
-        <button onclick="toggleAdmin()">
+        <button id="adminToggleButton" type="button">
             Admin Panel
         </button>
 
@@ -630,7 +630,7 @@ function toggleAdmin() {
     }
 
 }
-
+document.getElementById("adminToggleButton").addEventListener("click", toggleAdmin);
 
 /* =========================
    UPLOAD WALLPAPER
