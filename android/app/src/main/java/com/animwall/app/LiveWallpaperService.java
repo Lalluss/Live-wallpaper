@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
 import android.view.SurfaceHolder;
@@ -16,93 +17,78 @@ import java.net.URL;
 
 public class LiveWallpaperService extends WallpaperService {
 
-    private static final String PREFS_NAME =
-            "AnimeWallPrefs";
-
+    private static final String PREFS_NAME = "AnimeWallPrefs";
     private static final String LIVE_WALLPAPER_URL =
             "live_wallpaper_url";
-
 
     @Override
     public Engine onCreateEngine() {
         return new LiveEngine();
     }
 
-
     private class LiveEngine extends Engine {
 
-        private final Handler handler =
-                new Handler();
+        private final Handler handler = new Handler();
 
         private final Paint paint =
+                new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+
+        private final Paint glowPaint =
                 new Paint(Paint.ANTI_ALIAS_FLAG);
 
         private Bitmap bitmap;
 
         private boolean visible = false;
 
-        private float animationOffset = 0f;
+        private long startTime;
 
+        private final Runnable drawRunnable = new Runnable() {
+            @Override
+            public void run() {
+                drawFrame();
 
-        private final Runnable drawRunnable =
-                new Runnable() {
-
-                    @Override
-                    public void run() {
-
-                        drawFrame();
-
-                        if (visible) {
-
-                            handler.postDelayed(
-                                    this,
-                                    40
-                            );
-                        }
-                    }
-                };
-
+                if (visible) {
+                    handler.postDelayed(this, 33);
+                }
+            }
+        };
 
         @Override
-        public void onVisibilityChanged(
-                boolean visible
-        ) {
+        public void onCreate(SurfaceHolder surfaceHolder) {
+            super.onCreate(surfaceHolder);
+
+            startTime = System.currentTimeMillis();
+
+            paint.setFilterBitmap(true);
+            paint.setDither(true);
+
+            loadWallpaper();
+        }
+
+        @Override
+        public void onVisibilityChanged(boolean visible) {
 
             this.visible = visible;
 
             if (visible) {
 
-                if (bitmap == null) {
-                    loadWallpaper();
-                }
+                handler.removeCallbacks(drawRunnable);
 
-                handler.removeCallbacks(
-                        drawRunnable
-                );
-
-                handler.post(
-                        drawRunnable
-                );
+                handler.post(drawRunnable);
 
             } else {
 
-                handler.removeCallbacks(
-                        drawRunnable
-                );
+                handler.removeCallbacks(drawRunnable);
             }
         }
 
-
         @Override
-        public void onSurfaceCreated(
-                SurfaceHolder holder
-        ) {
+        public void onSurfaceCreated(SurfaceHolder holder) {
 
             super.onSurfaceCreated(holder);
 
             loadWallpaper();
         }
-
 
         @Override
         public void onSurfaceChanged(
@@ -122,27 +108,15 @@ public class LiveWallpaperService extends WallpaperService {
             drawFrame();
         }
 
-
         @Override
-        public void onSurfaceDestroyed(
-                SurfaceHolder holder
-        ) {
+        public void onSurfaceDestroyed(SurfaceHolder holder) {
 
             super.onSurfaceDestroyed(holder);
 
             visible = false;
 
-            handler.removeCallbacks(
-                    drawRunnable
-            );
+            handler.removeCallbacks(drawRunnable);
         }
-
-
-        /*
-         * ==========================================
-         * LOAD SELECTED WALLPAPER
-         * ==========================================
-         */
 
         private void loadWallpaper() {
 
@@ -152,80 +126,52 @@ public class LiveWallpaperService extends WallpaperService {
                             MODE_PRIVATE
                     );
 
-
             String imageUrl =
                     preferences.getString(
                             LIVE_WALLPAPER_URL,
                             ""
                     );
 
-
-            if (
-                    imageUrl == null ||
-                    imageUrl.isEmpty()
-            ) {
-
+            if (imageUrl == null || imageUrl.isEmpty()) {
                 return;
             }
 
-
             new Thread(() -> {
 
-                HttpURLConnection connection =
-                        null;
+                HttpURLConnection connection = null;
 
                 try {
 
-                    URL url =
-                            new URL(imageUrl);
-
+                    URL url = new URL(imageUrl);
 
                     connection =
                             (HttpURLConnection)
                                     url.openConnection();
 
-
-                    connection.setConnectTimeout(
-                            15000
-                    );
-
-                    connection.setReadTimeout(
-                            15000
-                    );
-
-
-                    connection.setUseCaches(false);
-
+                    connection.setConnectTimeout(15000);
+                    connection.setReadTimeout(15000);
+                    connection.setUseCaches(true);
 
                     InputStream input =
                             connection.getInputStream();
 
-
                     Bitmap downloadedBitmap =
-                            BitmapFactory.decodeStream(
-                                    input
-                            );
-
+                            BitmapFactory.decodeStream(input);
 
                     input.close();
 
+                    if (downloadedBitmap != null) {
 
-                    if (
-                            downloadedBitmap != null
-                    ) {
+                        bitmap = downloadedBitmap;
 
-                        bitmap =
-                                downloadedBitmap;
+                        handler.post(() -> {
 
+                            if (visible) {
+                                drawFrame();
+                            }
 
-                        if (visible) {
-
-                            handler.post(
-                                    this::drawFrame
-                            );
-                        }
+                        });
                     }
-
 
                 } catch (Exception e) {
 
@@ -241,119 +187,194 @@ public class LiveWallpaperService extends WallpaperService {
             }).start();
         }
 
-
-        /*
-         * ==========================================
-         * DRAW LIVE WALLPAPER
-         * ==========================================
-         */
-
         private void drawFrame() {
 
-            SurfaceHolder holder =
-                    getSurfaceHolder();
-
+            SurfaceHolder holder = getSurfaceHolder();
 
             Canvas canvas = null;
 
-
             try {
 
-                canvas =
-                        holder.lockCanvas();
-
+                canvas = holder.lockCanvas();
 
                 if (canvas == null) {
                     return;
                 }
 
+                int width = canvas.getWidth();
+                int height = canvas.getHeight();
 
-                canvas.drawColor(
-                        Color.BLACK
-                );
-
+                canvas.drawColor(Color.BLACK);
 
                 if (bitmap == null) {
                     return;
                 }
 
-
-                int canvasWidth =
-                        canvas.getWidth();
-
-                int canvasHeight =
-                        canvas.getHeight();
-
-
-                int imageWidth =
-                        bitmap.getWidth();
-
-                int imageHeight =
-                        bitmap.getHeight();
-
-
                 /*
-                 * Scale image so it fills
-                 * the complete screen.
+                 * ==========================================
+                 * 1. COVER IMAGE
+                 * ==========================================
                  */
 
-                float scale =
-                        Math.max(
-                                (float) canvasWidth /
-                                        imageWidth,
+                float imageWidth = bitmap.getWidth();
+                float imageHeight = bitmap.getHeight();
 
-                                (float) canvasHeight /
-                                        imageHeight
-                        );
+                float scale = Math.max(
+                        (float) width / imageWidth,
+                        (float) height / imageHeight
+                );
 
-
-                float scaledWidth =
-                        imageWidth * scale;
-
-
-                float scaledHeight =
-                        imageHeight * scale;
-
+                float scaledWidth = imageWidth * scale;
+                float scaledHeight = imageHeight * scale;
 
                 /*
-                 * Small smooth movement.
+                 * VERY SMALL BREATHING MOVEMENT
+                 *
+                 * Important:
+                 * The image does NOT continuously move
+                 * to the right anymore.
                  */
 
-                animationOffset +=
-                        0.12f;
+                float time =
+                        (System.currentTimeMillis() - startTime)
+                                / 1000f;
 
+                float breathing =
+                        (float) Math.sin(time * 0.45f);
 
-                if (
-                        animationOffset > 12f
-                ) {
+                float zoom =
+                        1.0f + (breathing * 0.004f);
 
-                    animationOffset = -12f;
-                }
+                float finalWidth =
+                        scaledWidth * zoom;
 
+                float finalHeight =
+                        scaledHeight * zoom;
 
                 float left =
-                        (canvasWidth -
-                                scaledWidth) / 2f
-                                + animationOffset;
-
+                        (width - finalWidth) / 2f;
 
                 float top =
-                        (canvasHeight -
-                                scaledHeight) / 2f;
+                        (height - finalHeight) / 2f;
 
+                RectF imageRect =
+                        new RectF(
+                                left,
+                                top,
+                                left + finalWidth,
+                                top + finalHeight
+                        );
 
                 canvas.drawBitmap(
                         bitmap,
                         null,
-                        new android.graphics.RectF(
-                                left,
-                                top,
-                                left + scaledWidth,
-                                top + scaledHeight
-                        ),
+                        imageRect,
                         paint
                 );
 
+                /*
+                 * ==========================================
+                 * 2. SUBTLE LIGHT / GLOW EFFECT
+                 * ==========================================
+                 *
+                 * This gives the wallpaper a very gentle
+                 * living/breathing atmosphere.
+                 */
+
+                float glowWave =
+                        (float)
+                                ((Math.sin(time * 1.1f) + 1.0f)
+                                        / 2.0f);
+
+                int alpha =
+                        (int) (4 + (glowWave * 10));
+
+                glowPaint.setColor(
+                        Color.argb(
+                                alpha,
+                                255,
+                                210,
+                                80
+                        )
+                );
+
+                glowPaint.setStyle(
+                        Paint.Style.FILL
+                );
+
+                /*
+                 * Very soft transparent light.
+                 *
+                 * Small area around the center,
+                 * not the entire wallpaper.
+                 */
+
+                float glowRadius =
+                        Math.min(width, height) * 0.32f;
+
+                float centerX =
+                        width * 0.50f;
+
+                float centerY =
+                        height * 0.48f;
+
+                canvas.drawCircle(
+                        centerX,
+                        centerY,
+                        glowRadius,
+                        glowPaint
+                );
+
+                /*
+                 * ==========================================
+                 * 3. TINY PARALLAX MOVEMENT
+                 * ==========================================
+                 *
+                 * Only a few pixels.
+                 *
+                 * This prevents the wallpaper from feeling
+                 * completely static while keeping the image
+                 * visually stable.
+                 */
+
+                float parallaxX =
+                        (float) Math.sin(time * 0.35f) * 1.5f;
+
+                float parallaxY =
+                        (float) Math.cos(time * 0.30f) * 1.0f;
+
+                /*
+                 * Small translucent atmospheric layer.
+                 */
+
+                Paint atmosphere =
+                        new Paint(Paint.ANTI_ALIAS_FLAG);
+
+                atmosphere.setColor(
+                        Color.argb(
+                                5,
+                                255,
+                                255,
+                                255
+                        )
+                );
+
+                canvas.save();
+
+                canvas.translate(
+                        parallaxX,
+                        parallaxY
+                );
+
+                canvas.drawRect(
+                        0,
+                        0,
+                        width,
+                        height,
+                        atmosphere
+                );
+
+                canvas.restore();
 
             } catch (Exception e) {
 
@@ -362,10 +383,7 @@ public class LiveWallpaperService extends WallpaperService {
             } finally {
 
                 if (canvas != null) {
-
-                    holder.unlockCanvasAndPost(
-                            canvas
-                    );
+                    holder.unlockCanvasAndPost(canvas);
                 }
             }
         }
