@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+
+    <string name="app_name">AnimeWall</string>
+
+    <string name="live_wallpaper_description">
+        AnimeWall Live Wallpaper
+    </string>
+
+</resources>
