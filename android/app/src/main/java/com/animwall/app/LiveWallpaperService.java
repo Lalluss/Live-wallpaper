@@ -1,23 +1,22 @@
 package com.animwall.app;
 
 import android.content.SharedPreferences;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.RectF;
+import android.net.Uri;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
 import android.view.SurfaceHolder;
-
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import android.view.View;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 public class LiveWallpaperService extends WallpaperService {
 
-    private static final String PREFS_NAME = "AnimeWallPrefs";
+    private static final String PREFS_NAME =
+            "AnimeWallPrefs";
+
     private static final String LIVE_WALLPAPER_URL =
             "live_wallpaper_url";
 
@@ -28,67 +27,226 @@ public class LiveWallpaperService extends WallpaperService {
 
     private class LiveEngine extends Engine {
 
-        private final Handler handler = new Handler();
+        private final Handler handler =
+                new Handler();
 
-        private final Paint paint =
-                new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-
-        private final Paint glowPaint =
-                new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        private Bitmap bitmap;
+        private WebView webView;
 
         private boolean visible = false;
 
-        private long startTime;
+        private int surfaceWidth = 1080;
+        private int surfaceHeight = 1920;
 
-        private final Runnable drawRunnable = new Runnable() {
-            @Override
-            public void run() {
-                drawFrame();
+        private final Runnable drawRunnable =
+                new Runnable() {
+                    @Override
+                    public void run() {
 
-                if (visible) {
-                    handler.postDelayed(this, 33);
-                }
-            }
-        };
+                        drawFrame();
+
+                        if (visible) {
+                            handler.postDelayed(
+                                    this,
+                                    33
+                            );
+                        }
+                    }
+                };
 
         @Override
-        public void onCreate(SurfaceHolder surfaceHolder) {
+        public void onCreate(
+                SurfaceHolder surfaceHolder
+        ) {
             super.onCreate(surfaceHolder);
 
-            startTime = System.currentTimeMillis();
+            createWebView();
 
-            paint.setFilterBitmap(true);
-            paint.setDither(true);
-
-            loadWallpaper();
+            loadLiveWallpaper();
         }
 
+        /*
+         * ==========================================
+         * CREATE HTML/CSS/JS ENGINE
+         * ==========================================
+         */
+
+        private void createWebView() {
+
+            webView = new WebView(
+                    AnimeWallApplication.getContext()
+            );
+
+            WebSettings settings =
+                    webView.getSettings();
+
+            settings.setJavaScriptEnabled(true);
+
+            settings.setDomStorageEnabled(true);
+
+            settings.setLoadWithOverviewMode(false);
+
+            settings.setUseWideViewPort(false);
+
+            settings.setBuiltInZoomControls(false);
+
+            settings.setDisplayZoomControls(false);
+
+            webView.setBackgroundColor(
+                    Color.TRANSPARENT
+            );
+
+            webView.setLayerType(
+                    View.LAYER_TYPE_HARDWARE,
+                    null
+            );
+
+            webView.setWebViewClient(
+                    new WebViewClient() {
+
+                        @Override
+                        public void onPageFinished(
+                                WebView view,
+                                String url
+                        ) {
+
+                            super.onPageFinished(
+                                    view,
+                                    url
+                            );
+
+                            handler.post(
+                                    () -> {
+
+                                        if (webView != null) {
+                                            webView.measure(
+                                                    View.MeasureSpec.makeMeasureSpec(
+                                                            surfaceWidth,
+                                                            View.MeasureSpec.EXACTLY
+                                                    ),
+                                                    View.MeasureSpec.makeMeasureSpec(
+                                                            surfaceHeight,
+                                                            View.MeasureSpec.EXACTLY
+                                                    )
+                                            );
+
+                                            webView.layout(
+                                                    0,
+                                                    0,
+                                                    surfaceWidth,
+                                                    surfaceHeight
+                                            );
+                                        }
+
+                                    }
+                            );
+                        }
+                    }
+            );
+        }
+
+        /*
+         * ==========================================
+         * LOAD SELECTED WALLPAPER
+         * ==========================================
+         */
+
+        private void loadLiveWallpaper() {
+
+            SharedPreferences preferences =
+                    getSharedPreferences(
+                            PREFS_NAME,
+                            MODE_PRIVATE
+                    );
+
+            String imageUrl =
+                    preferences.getString(
+                            LIVE_WALLPAPER_URL,
+                            ""
+                    );
+
+            if (
+                    imageUrl == null ||
+                    imageUrl.isEmpty()
+            ) {
+                return;
+            }
+
+            /*
+             * Safely encode the image URL.
+             */
+
+            String encodedUrl =
+                    Uri.encode(imageUrl);
+
+            String htmlUrl =
+                    "file:///android_asset/live.html"
+                            + "?image="
+                            + encodedUrl;
+
+            handler.post(() -> {
+
+                if (webView != null) {
+
+                    webView.loadUrl(
+                            htmlUrl
+                    );
+                }
+
+            });
+        }
+
+        /*
+         * ==========================================
+         * VISIBILITY
+         * ==========================================
+         */
+
         @Override
-        public void onVisibilityChanged(boolean visible) {
+        public void onVisibilityChanged(
+                boolean visible
+        ) {
 
             this.visible = visible;
 
             if (visible) {
 
-                handler.removeCallbacks(drawRunnable);
+                handler.removeCallbacks(
+                        drawRunnable
+                );
 
-                handler.post(drawRunnable);
+                handler.post(
+                        drawRunnable
+                );
 
             } else {
 
-                handler.removeCallbacks(drawRunnable);
+                handler.removeCallbacks(
+                        drawRunnable
+                );
             }
         }
 
+        /*
+         * ==========================================
+         * SURFACE CREATED
+         * ==========================================
+         */
+
         @Override
-        public void onSurfaceCreated(SurfaceHolder holder) {
+        public void onSurfaceCreated(
+                SurfaceHolder holder
+        ) {
 
             super.onSurfaceCreated(holder);
 
-            loadWallpaper();
+            loadLiveWallpaper();
         }
+
+        /*
+         * ==========================================
+         * SURFACE SIZE
+         * ==========================================
+         */
 
         @Override
         public void onSurfaceChanged(
@@ -105,276 +263,104 @@ public class LiveWallpaperService extends WallpaperService {
                     height
             );
 
+            surfaceWidth = width;
+            surfaceHeight = height;
+
+            if (webView != null) {
+
+                webView.measure(
+                        View.MeasureSpec.makeMeasureSpec(
+                                width,
+                                View.MeasureSpec.EXACTLY
+                        ),
+                        View.MeasureSpec.makeMeasureSpec(
+                                height,
+                                View.MeasureSpec.EXACTLY
+                        )
+                );
+
+                webView.layout(
+                        0,
+                        0,
+                        width,
+                        height
+                );
+            }
+
             drawFrame();
         }
 
-        @Override
-        public void onSurfaceDestroyed(SurfaceHolder holder) {
-
-            super.onSurfaceDestroyed(holder);
-
-            visible = false;
-
-            handler.removeCallbacks(drawRunnable);
-        }
-
-        private void loadWallpaper() {
-
-            SharedPreferences preferences =
-                    getSharedPreferences(
-                            PREFS_NAME,
-                            MODE_PRIVATE
-                    );
-
-            String imageUrl =
-                    preferences.getString(
-                            LIVE_WALLPAPER_URL,
-                            ""
-                    );
-
-            if (imageUrl == null || imageUrl.isEmpty()) {
-                return;
-            }
-
-            new Thread(() -> {
-
-                HttpURLConnection connection = null;
-
-                try {
-
-                    URL url = new URL(imageUrl);
-
-                    connection =
-                            (HttpURLConnection)
-                                    url.openConnection();
-
-                    connection.setConnectTimeout(15000);
-                    connection.setReadTimeout(15000);
-                    connection.setUseCaches(true);
-
-                    InputStream input =
-                            connection.getInputStream();
-
-                    Bitmap downloadedBitmap =
-                            BitmapFactory.decodeStream(input);
-
-                    input.close();
-
-                    if (downloadedBitmap != null) {
-
-                        bitmap = downloadedBitmap;
-
-                        handler.post(() -> {
-
-                            if (visible) {
-                                drawFrame();
-                            }
-
-                        });
-                    }
-
-                } catch (Exception e) {
-
-                    e.printStackTrace();
-
-                } finally {
-
-                    if (connection != null) {
-                        connection.disconnect();
-                    }
-                }
-
-            }).start();
-        }
+        /*
+         * ==========================================
+         * DRAW HTML/CSS/JS TO WALLPAPER
+         * ==========================================
+         */
 
         private void drawFrame() {
 
-            SurfaceHolder holder = getSurfaceHolder();
+            SurfaceHolder holder =
+                    getSurfaceHolder();
 
             Canvas canvas = null;
 
             try {
 
-                canvas = holder.lockCanvas();
+                canvas =
+                        holder.lockCanvas();
 
                 if (canvas == null) {
                     return;
                 }
 
-                int width = canvas.getWidth();
-                int height = canvas.getHeight();
+                canvas.drawColor(
+                        Color.BLACK
+                );
 
-                canvas.drawColor(Color.BLACK);
-
-                if (bitmap == null) {
+                if (webView == null) {
                     return;
                 }
 
                 /*
-                 * ==========================================
-                 * 1. COVER IMAGE
-                 * ==========================================
+                 * Make sure WebView matches
+                 * the wallpaper size.
                  */
 
-                float imageWidth = bitmap.getWidth();
-                float imageHeight = bitmap.getHeight();
+                if (
+                        webView.getWidth()
+                                != surfaceWidth
+                                ||
+                        webView.getHeight()
+                                != surfaceHeight
+                ) {
 
-                float scale = Math.max(
-                        (float) width / imageWidth,
-                        (float) height / imageHeight
-                );
+                    webView.measure(
+                            View.MeasureSpec.makeMeasureSpec(
+                                    surfaceWidth,
+                                    View.MeasureSpec.EXACTLY
+                            ),
+                            View.MeasureSpec.makeMeasureSpec(
+                                    surfaceHeight,
+                                    View.MeasureSpec.EXACTLY
+                            )
+                    );
 
-                float scaledWidth = imageWidth * scale;
-                float scaledHeight = imageHeight * scale;
+                    webView.layout(
+                            0,
+                            0,
+                            surfaceWidth,
+                            surfaceHeight
+                    );
+                }
 
                 /*
-                 * VERY SMALL BREATHING MOVEMENT
+                 * Render the HTML page.
                  *
-                 * Important:
-                 * The image does NOT continuously move
-                 * to the right anymore.
+                 * CSS animations and JavaScript
+                 * animations are already running
+                 * inside the WebView.
                  */
 
-                float time =
-                        (System.currentTimeMillis() - startTime)
-                                / 1000f;
-
-                float breathing =
-                        (float) Math.sin(time * 0.45f);
-
-                float zoom =
-                        1.0f + (breathing * 0.004f);
-
-                float finalWidth =
-                        scaledWidth * zoom;
-
-                float finalHeight =
-                        scaledHeight * zoom;
-
-                float left =
-                        (width - finalWidth) / 2f;
-
-                float top =
-                        (height - finalHeight) / 2f;
-
-                RectF imageRect =
-                        new RectF(
-                                left,
-                                top,
-                                left + finalWidth,
-                                top + finalHeight
-                        );
-
-                canvas.drawBitmap(
-                        bitmap,
-                        null,
-                        imageRect,
-                        paint
-                );
-
-                /*
-                 * ==========================================
-                 * 2. SUBTLE LIGHT / GLOW EFFECT
-                 * ==========================================
-                 *
-                 * This gives the wallpaper a very gentle
-                 * living/breathing atmosphere.
-                 */
-
-                float glowWave =
-                        (float)
-                                ((Math.sin(time * 1.1f) + 1.0f)
-                                        / 2.0f);
-
-                int alpha =
-                        (int) (4 + (glowWave * 10));
-
-                glowPaint.setColor(
-                        Color.argb(
-                                alpha,
-                                255,
-                                210,
-                                80
-                        )
-                );
-
-                glowPaint.setStyle(
-                        Paint.Style.FILL
-                );
-
-                /*
-                 * Very soft transparent light.
-                 *
-                 * Small area around the center,
-                 * not the entire wallpaper.
-                 */
-
-                float glowRadius =
-                        Math.min(width, height) * 0.32f;
-
-                float centerX =
-                        width * 0.50f;
-
-                float centerY =
-                        height * 0.48f;
-
-                canvas.drawCircle(
-                        centerX,
-                        centerY,
-                        glowRadius,
-                        glowPaint
-                );
-
-                /*
-                 * ==========================================
-                 * 3. TINY PARALLAX MOVEMENT
-                 * ==========================================
-                 *
-                 * Only a few pixels.
-                 *
-                 * This prevents the wallpaper from feeling
-                 * completely static while keeping the image
-                 * visually stable.
-                 */
-
-                float parallaxX =
-                        (float) Math.sin(time * 0.35f) * 1.5f;
-
-                float parallaxY =
-                        (float) Math.cos(time * 0.30f) * 1.0f;
-
-                /*
-                 * Small translucent atmospheric layer.
-                 */
-
-                Paint atmosphere =
-                        new Paint(Paint.ANTI_ALIAS_FLAG);
-
-                atmosphere.setColor(
-                        Color.argb(
-                                5,
-                                255,
-                                255,
-                                255
-                        )
-                );
-
-                canvas.save();
-
-                canvas.translate(
-                        parallaxX,
-                        parallaxY
-                );
-
-                canvas.drawRect(
-                        0,
-                        0,
-                        width,
-                        height,
-                        atmosphere
-                );
-
-                canvas.restore();
+                webView.draw(canvas);
 
             } catch (Exception e) {
 
@@ -383,8 +369,69 @@ public class LiveWallpaperService extends WallpaperService {
             } finally {
 
                 if (canvas != null) {
-                    holder.unlockCanvasAndPost(canvas);
+
+                    holder.unlockCanvasAndPost(
+                            canvas
+                    );
                 }
+            }
+        }
+
+        /*
+         * ==========================================
+         * SURFACE DESTROYED
+         * ==========================================
+         */
+
+        @Override
+        public void onSurfaceDestroyed(
+                SurfaceHolder holder
+        ) {
+
+            super.onSurfaceDestroyed(holder);
+
+            visible = false;
+
+            handler.removeCallbacks(
+                    drawRunnable
+            );
+
+            destroyWebView();
+        }
+
+        /*
+         * ==========================================
+         * CLEANUP
+         * ==========================================
+         */
+
+        private void destroyWebView() {
+
+            if (webView != null) {
+
+                handler.post(() -> {
+
+                    try {
+
+                        webView.stopLoading();
+
+                        webView.loadUrl(
+                                "about:blank"
+                        );
+
+                        webView.clearHistory();
+
+                        webView.removeAllViews();
+
+                        webView.destroy();
+
+                    } catch (Exception e) {
+
+                        e.printStackTrace();
+                    }
+
+                    webView = null;
+                });
             }
         }
     }
