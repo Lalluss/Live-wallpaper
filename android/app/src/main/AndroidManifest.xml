@@ -2,8 +2,11 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Internet access for loading wallpapers -->
+    <uses-permission
+        android:name="android.permission.INTERNET" />
 
+    <!-- Permission to set normal wallpapers -->
     <uses-permission
         android:name="android.permission.SET_WALLPAPER" />
 
@@ -12,11 +15,13 @@
         android:label="AnimeWall"
         android:theme="@style/Theme.AnimeWall">
 
+        <!-- Main App -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
 
             <intent-filter>
+
                 <action
                     android:name="android.intent.action.MAIN" />
 
@@ -26,6 +31,27 @@
             </intent-filter>
 
         </activity>
+
+
+        <!-- Live Wallpaper Service -->
+        <service
+            android:name=".LiveWallpaperService"
+            android:permission="android.permission.BIND_WALLPAPER"
+            android:exported="true"
+            android:label="AnimeWall Live Wallpaper">
+
+            <intent-filter>
+
+                <action
+                    android:name="android.service.wallpaper.WallpaperService" />
+
+            </intent-filter>
+
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/live_wallpaper" />
+
+        </service>
 
     </application>
 
