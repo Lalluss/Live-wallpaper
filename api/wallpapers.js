@@ -1,6 +1,10 @@
-import { put, list } from "@vercel/blob";
+import { put, list, del } from "@vercel/blob";
 import crypto from "crypto";
 
+
+// ==========================================
+// ADMIN SESSION VERIFICATION
+// ==========================================
 
 function verifyAdminSession(req) {
 
@@ -31,7 +35,6 @@ function verifyAdminSession(req) {
     return false;
   }
 
-
   // Session expires after 24 hours
   if (
     Date.now() - timestampNumber > 86400000 ||
@@ -39,7 +42,6 @@ function verifyAdminSession(req) {
   ) {
     return false;
   }
-
 
   const expectedSignature = crypto
     .createHmac(
@@ -49,14 +51,12 @@ function verifyAdminSession(req) {
     .update(timestamp)
     .digest("hex");
 
-
-  // Prevent timingSafeEqual length errors
   if (
-    signature.length !== expectedSignature.length
+    signature.length !==
+    expectedSignature.length
   ) {
     return false;
   }
-
 
   try {
 
@@ -77,12 +77,55 @@ function verifyAdminSession(req) {
 }
 
 
+// ==========================================
+// ADMIN CHECK
+// ==========================================
+
+function requireAdmin(req, res) {
+
+  if (!verifyAdminSession(req)) {
+
+    res.status(401).json({
+      error: "Admin login required"
+    });
+
+    return false;
+  }
+
+  return true;
+}
+
+
+// ==========================================
+// GET METADATA PATH FROM URL
+// ==========================================
+
+function getBlobPath(blobUrl) {
+
+  try {
+
+    const url = new URL(blobUrl);
+
+    return decodeURIComponent(
+      url.pathname.replace(/^\/+/, "")
+    );
+
+  } catch (error) {
+
+    return null;
+  }
+}
+
+
+// ==========================================
+// MAIN API
+// ==========================================
 
 export default async function handler(req, res) {
 
 
   // ==========================================
-  // GET → Load online wallpapers
+  // GET → LOAD ALL WALLPAPERS
   // ==========================================
 
   if (req.method === "GET") {
@@ -93,23 +136,26 @@ export default async function handler(req, res) {
         prefix: "wallpapers-data/"
       });
 
-
       const wallpapers = [];
-
 
       for (const blob of result.blobs) {
 
         try {
 
-          const response = await fetch(
-            blob.url
-          );
+          const response =
+            await fetch(blob.url);
 
           const data =
             await response.json();
 
+          wallpapers.push({
 
-          wallpapers.push(data);
+            ...data,
+
+            metadataUrl:
+              blob.url
+
+          });
 
         } catch (error) {
 
@@ -119,7 +165,6 @@ export default async function handler(req, res) {
           );
 
         }
-
       }
 
 
@@ -136,40 +181,29 @@ export default async function handler(req, res) {
 
     } catch (error) {
 
-      console.error(error);
-
+      console.error(
+        "GET wallpapers error:",
+        error
+      );
 
       return res.status(500).json({
         error:
           "Failed to load wallpapers"
       });
-
     }
-
   }
 
 
 
   // ==========================================
-  // POST → Upload wallpaper
+  // POST → UPLOAD WALLPAPER
   // ==========================================
 
   if (req.method === "POST") {
 
-
-    // ------------------------------------------
-    // Check admin login
-    // ------------------------------------------
-
-    if (!verifyAdminSession(req)) {
-
-      return res.status(401).json({
-        error:
-          "Admin login required"
-      });
-
+    if (!requireAdmin(req, res)) {
+      return;
     }
-
 
 
     try {
@@ -187,15 +221,10 @@ export default async function handler(req, res) {
           error:
             "Title and image are required"
         });
-
       }
 
 
-
-      // ------------------------------------------
-      // Convert base64 image to file
-      // ------------------------------------------
-
+      // Convert base64 image
       const imageParts =
         body.image.split(",");
 
@@ -206,7 +235,6 @@ export default async function handler(req, res) {
           error:
             "Invalid image data"
         });
-
       }
 
 
@@ -216,11 +244,7 @@ export default async function handler(req, res) {
       );
 
 
-
-      // ------------------------------------------
-      // Create safe filename
-      // ------------------------------------------
-
+      // Safe filename
       const safeTitle =
         body.title
           .replace(/[^a-z0-9]/gi, "-")
@@ -231,11 +255,7 @@ export default async function handler(req, res) {
         Date.now();
 
 
-
-      // ------------------------------------------
-      // Upload actual wallpaper
-      // ------------------------------------------
-
+      // Upload image
       const imageBlob =
         await put(
           `wallpapers/${timestamp}-${safeTitle}.jpg`,
@@ -247,12 +267,11 @@ export default async function handler(req, res) {
         );
 
 
-
-      // ------------------------------------------
-      // Save wallpaper information
-      // ------------------------------------------
-
+      // Wallpaper metadata
       const wallpaperData = {
+
+        id:
+          String(timestamp),
 
         title:
           body.title,
@@ -266,36 +285,34 @@ export default async function handler(req, res) {
       };
 
 
-
-      // ------------------------------------------
       // Save metadata
-      // ------------------------------------------
+      const metadataBlob =
+        await put(
+          `wallpapers-data/${timestamp}-${safeTitle}.json`,
+          JSON.stringify(
+            wallpaperData
+          ),
+          {
+            access: "public",
+            addRandomSuffix: true,
+            contentType:
+              "application/json"
+          }
+        );
 
-      await put(
-        `wallpapers-data/${timestamp}-${safeTitle}.json`,
-        JSON.stringify(
-          wallpaperData
-        ),
-        {
-          access: "public",
-          addRandomSuffix: true,
-          contentType:
-            "application/json"
-        }
-      );
-
-
-
-      // ------------------------------------------
-      // Success
-      // ------------------------------------------
 
       return res.status(200).json({
 
         success: true,
 
-        wallpaper:
-          wallpaperData
+        wallpaper: {
+
+          ...wallpaperData,
+
+          metadataUrl:
+            metadataBlob.url
+
+        }
 
       });
 
@@ -314,15 +331,351 @@ export default async function handler(req, res) {
           "Wallpaper upload failed"
 
       });
-
     }
-
   }
 
 
 
   // ==========================================
-  // Other methods
+  // PUT → EDIT WALLPAPER
+  // ==========================================
+
+  if (req.method === "PUT") {
+
+    if (!requireAdmin(req, res)) {
+      return;
+    }
+
+
+    try {
+
+      const body = req.body;
+
+
+      if (
+        !body ||
+        !body.metadataUrl ||
+        !body.title
+      ) {
+
+        return res.status(400).json({
+
+          error:
+            "Metadata URL and title are required"
+
+        });
+      }
+
+
+      // Read existing metadata
+      const response =
+        await fetch(
+          body.metadataUrl
+        );
+
+
+      if (!response.ok) {
+
+        return res.status(404).json({
+
+          error:
+            "Wallpaper metadata not found"
+
+        });
+      }
+
+
+      const oldData =
+        await response.json();
+
+
+      // ------------------------------------------
+      // OPTIONAL: REPLACE IMAGE
+      // ------------------------------------------
+
+      let newImageUrl =
+        oldData.image;
+
+
+      if (body.image) {
+
+        const imageParts =
+          body.image.split(",");
+
+
+        if (imageParts.length < 2) {
+
+          return res.status(400).json({
+
+            error:
+              "Invalid image data"
+
+          });
+        }
+
+
+        const file =
+          Buffer.from(
+            imageParts[1],
+            "base64"
+          );
+
+
+        const safeTitle =
+          body.title
+            .replace(
+              /[^a-z0-9]/gi,
+              "-"
+            )
+            .toLowerCase();
+
+
+        const imageBlob =
+          await put(
+            `wallpapers/${Date.now()}-${safeTitle}.jpg`,
+            file,
+            {
+              access: "public",
+              addRandomSuffix: true
+            }
+          );
+
+
+        newImageUrl =
+          imageBlob.url;
+
+
+        // Delete old image
+        if (oldData.image) {
+
+          try {
+
+            await del(
+              oldData.image
+            );
+
+          } catch (deleteError) {
+
+            console.error(
+              "Old image delete error:",
+              deleteError
+            );
+
+          }
+        }
+      }
+
+
+      // ------------------------------------------
+      // UPDATED DATA
+      // ------------------------------------------
+
+      const updatedData = {
+
+        ...oldData,
+
+        title:
+          body.title,
+
+        image:
+          newImageUrl,
+
+        updatedAt:
+          Date.now()
+
+      };
+
+
+      // Get exact existing metadata pathname
+      const metadataPath =
+        getBlobPath(
+          body.metadataUrl
+        );
+
+
+      if (!metadataPath) {
+
+        return res.status(400).json({
+
+          error:
+            "Invalid metadata URL"
+
+        });
+      }
+
+
+      // Overwrite existing metadata
+      await put(
+        metadataPath,
+        JSON.stringify(
+          updatedData
+        ),
+        {
+          access: "public",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType:
+            "application/json"
+        }
+      );
+
+
+      return res.status(200).json({
+
+        success: true,
+
+        wallpaper: {
+
+          ...updatedData,
+
+          metadataUrl:
+            body.metadataUrl
+
+        }
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Wallpaper edit error:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        error:
+          "Wallpaper update failed"
+
+      });
+    }
+  }
+
+
+
+  // ==========================================
+  // DELETE → DELETE WALLPAPER
+  // ==========================================
+
+  if (req.method === "DELETE") {
+
+    if (!requireAdmin(req, res)) {
+      return;
+    }
+
+
+    try {
+
+      const body = req.body;
+
+
+      if (
+        !body ||
+        !body.metadataUrl
+      ) {
+
+        return res.status(400).json({
+
+          error:
+            "Metadata URL is required"
+
+        });
+      }
+
+
+      // Read metadata first
+      const response =
+        await fetch(
+          body.metadataUrl
+        );
+
+
+      if (!response.ok) {
+
+        return res.status(404).json({
+
+          error:
+            "Wallpaper not found"
+
+        });
+      }
+
+
+      const data =
+        await response.json();
+
+
+      // Delete metadata
+      try {
+
+        await del(
+          body.metadataUrl
+        );
+
+      } catch (metadataError) {
+
+        console.error(
+          "Metadata delete error:",
+          metadataError
+        );
+
+        throw metadataError;
+      }
+
+
+      // Delete actual image
+      if (data.image) {
+
+        try {
+
+          await del(
+            data.image
+          );
+
+        } catch (imageError) {
+
+          console.error(
+            "Image delete error:",
+            imageError
+          );
+
+        }
+      }
+
+
+      return res.status(200).json({
+
+        success: true,
+
+        message:
+          "Wallpaper deleted"
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Wallpaper delete error:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        error:
+          "Wallpaper delete failed"
+
+      });
+    }
+  }
+
+
+
+  // ==========================================
+  // METHOD NOT ALLOWED
   // ==========================================
 
   return res.status(405).json({
@@ -332,4 +685,4 @@ export default async function handler(req, res) {
 
   });
 
-      }
+}
