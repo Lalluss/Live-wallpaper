@@ -1,8 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
 
 <title>AnimeWall</title>
 
@@ -27,8 +32,6 @@ body {
     margin: auto;
     padding: 20px 16px 50px;
 }
-
-/* HEADER */
 
 .header {
     display: flex;
@@ -55,8 +58,6 @@ body {
     color: #aaa;
 }
 
-/* HERO */
-
 .hero {
     text-align: center;
     margin-bottom: 35px;
@@ -78,8 +79,6 @@ body {
     line-height: 1.6;
 }
 
-/* SECTION */
-
 .section {
     background: #11131c;
     border: 1px solid #242735;
@@ -94,13 +93,12 @@ body {
     margin-bottom: 15px;
 }
 
-/* ADMIN */
-
 .admin-box {
     display: none;
 }
 
-input[type="file"] {
+input[type="file"],
+input[type="text"] {
     width: 100%;
     padding: 14px;
     background: #090a10;
@@ -111,14 +109,7 @@ input[type="file"] {
 }
 
 input[type="text"] {
-    width: 100%;
-    padding: 14px;
-    background: #090a10;
-    border: 1px solid #292c3a;
-    border-radius: 14px;
-    color: white;
     outline: none;
-    margin-bottom: 12px;
 }
 
 .primary-btn {
@@ -133,7 +124,9 @@ input[type="text"] {
     cursor: pointer;
 }
 
-/* WALLPAPER */
+.primary-btn:disabled {
+    opacity: 0.5;
+}
 
 .wallpaper-card {
     background: #151722;
@@ -156,24 +149,6 @@ input[type="text"] {
     height: 100%;
     object-fit: cover;
     display: block;
-}
-
-/* MOTION */
-
-.motion {
-    animation: slowZoom 8s ease-in-out infinite alternate;
-}
-
-@keyframes slowZoom {
-
-    from {
-        transform: scale(1);
-    }
-
-    to {
-        transform: scale(1.08);
-    }
-
 }
 
 .wallpaper-info {
@@ -218,8 +193,6 @@ input[type="text"] {
     font-weight: 800;
     cursor: pointer;
 }
-
-/* LIVE VIEW */
 
 .live-view {
     display: none;
@@ -281,8 +254,6 @@ input[type="text"] {
     color: white;
 }
 
-/* EMPTY */
-
 .empty {
     text-align: center;
     padding: 45px 20px;
@@ -293,8 +264,6 @@ input[type="text"] {
     font-size: 45px;
     margin-bottom: 10px;
 }
-
-/* ADMIN BUTTON */
 
 .admin-toggle {
     text-align: center;
@@ -318,14 +287,19 @@ input[type="text"] {
     font-size: 13px;
 }
 
+.loading {
+    text-align: center;
+    padding: 35px;
+    color: #777;
+}
+
 </style>
+
 </head>
 
 <body>
 
 <div class="app">
-
-    <!-- HEADER -->
 
     <div class="header">
 
@@ -340,8 +314,6 @@ input[type="text"] {
     </div>
 
 
-    <!-- HERO -->
-
     <div class="hero">
 
         <h1>
@@ -355,9 +327,10 @@ input[type="text"] {
     </div>
 
 
-    <!-- ADMIN -->
-
-    <div class="section admin-box" id="adminBox">
+    <div
+        class="section admin-box"
+        id="adminBox"
+    >
 
         <div class="section-title">
             👑 Admin Upload
@@ -377,6 +350,7 @@ input[type="text"] {
 
         <button
             class="primary-btn"
+            id="uploadButton"
             onclick="uploadWallpaper()"
         >
             📤 Publish Wallpaper
@@ -390,8 +364,6 @@ input[type="text"] {
     </div>
 
 
-    <!-- WALLPAPERS -->
-
     <div class="section">
 
         <div class="section-title">
@@ -400,22 +372,14 @@ input[type="text"] {
 
         <div id="wallpaperList">
 
-            <div class="empty">
-
-                <div class="empty-icon">
-                    🖼️
-                </div>
-
-                No wallpapers yet.
-
+            <div class="loading">
+                Loading wallpapers...
             </div>
 
         </div>
 
     </div>
 
-
-    <!-- ADMIN TOGGLE -->
 
     <div class="admin-toggle">
 
@@ -427,8 +391,6 @@ input[type="text"] {
 
 </div>
 
-
-<!-- LIVE VIEW -->
 
 <div
     class="live-view"
@@ -464,18 +426,60 @@ input[type="text"] {
 
 <script>
 
+let wallpapers = [];
+
+
 /* =========================
-   WALLPAPER STORAGE
+   LOAD ONLINE WALLPAPERS
 ========================= */
 
-let wallpapers =
-    JSON.parse(
-        localStorage.getItem("animeWallpapers") || "[]"
-    );
+async function loadWallpapers() {
+
+    const list =
+        document.getElementById("wallpaperList");
+
+    try {
+
+        const response =
+            await fetch("/api/wallpapers");
+
+        if (!response.ok) {
+            throw new Error("Failed to load");
+        }
+
+        const data =
+            await response.json();
+
+        wallpapers =
+            data.wallpapers || [];
+
+        renderWallpapers();
+
+    } catch (error) {
+
+        console.error(error);
+
+        list.innerHTML = `
+            <div class="empty">
+                <div class="empty-icon">
+                    ⚠️
+                </div>
+
+                Failed to load wallpapers.
+
+                <br><br>
+
+                Refresh the page and try again.
+            </div>
+        `;
+
+    }
+
+}
 
 
 /* =========================
-   SHOW WALLPAPERS
+   RENDER WALLPAPERS
 ========================= */
 
 function renderWallpapers() {
@@ -504,82 +508,103 @@ function renderWallpapers() {
     list.innerHTML = "";
 
 
-    wallpapers.forEach((wallpaper, index) => {
+    wallpapers.forEach(
+        (wallpaper, index) => {
 
-        const card =
-            document.createElement("div");
+            const card =
+                document.createElement("div");
 
-        card.className =
-            "wallpaper-card";
-
-
-        card.innerHTML = `
-
-            <div class="wallpaper-preview">
-
-                <img
-                    src="${wallpaper.image}"
-                    alt="${wallpaper.title}"
-                >
-
-            </div>
+            card.className =
+                "wallpaper-card";
 
 
-            <div class="wallpaper-info">
+            card.innerHTML = `
 
-                <div class="wallpaper-title">
-                    ${wallpaper.title}
-                </div>
+                <div class="wallpaper-preview">
 
-
-                <div class="buttons">
-
-                    <button
-                        class="wall-btn"
-                        onclick="setNormal(${index}, 'home')"
+                    <img
+                        src="${escapeHtml(wallpaper.image)}"
+                        alt="${escapeHtml(wallpaper.title)}"
                     >
-                        🏠 Home
-                    </button>
-
-                    <button
-                        class="wall-btn"
-                        onclick="setNormal(${index}, 'lock')"
-                    >
-                        🔒 Lock
-                    </button>
-
-                    <button
-                        class="wall-btn"
-                        onclick="setNormal(${index}, 'both')"
-                    >
-                        🏠🔒 Both
-                    </button>
-
-                    <button
-                        class="wall-btn live"
-                        onclick="openLive(${index})"
-                    >
-                        ✨ LIVE
-                    </button>
 
                 </div>
 
 
-                <button
-                    class="download"
-                    onclick="downloadWallpaper(${index})"
-                >
-                    ⬇️ Download Wallpaper
-                </button>
+                <div class="wallpaper-info">
 
-            </div>
-
-        `;
+                    <div class="wallpaper-title">
+                        ${escapeHtml(wallpaper.title)}
+                    </div>
 
 
-        list.appendChild(card);
+                    <div class="buttons">
 
-    });
+                        <button
+                            class="wall-btn"
+                            onclick="setNormal(${index}, 'home')"
+                        >
+                            🏠 Home
+                        </button>
+
+
+                        <button
+                            class="wall-btn"
+                            onclick="setNormal(${index}, 'lock')"
+                        >
+                            🔒 Lock
+                        </button>
+
+
+                        <button
+                            class="wall-btn"
+                            onclick="setNormal(${index}, 'both')"
+                        >
+                            🏠🔒 Both
+                        </button>
+
+
+                        <button
+                            class="wall-btn live"
+                            onclick="openLive(${index})"
+                        >
+                            ✨ LIVE
+                        </button>
+
+                    </div>
+
+
+                    <button
+                        class="download"
+                        onclick="downloadWallpaper(${index})"
+                    >
+                        ⬇️ Download Wallpaper
+                    </button>
+
+                </div>
+
+            `;
+
+
+            list.appendChild(card);
+
+        }
+    );
+
+}
+
+
+/* =========================
+   ESCAPE HTML
+========================= */
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
 }
 
@@ -592,6 +617,7 @@ function toggleAdmin() {
 
     const box =
         document.getElementById("adminBox");
+
 
     if (box.style.display === "block") {
 
@@ -607,21 +633,28 @@ function toggleAdmin() {
 
 
 /* =========================
-   UPLOAD
+   UPLOAD WALLPAPER
 ========================= */
 
-function uploadWallpaper() {
+async function uploadWallpaper() {
 
     const file =
         document.getElementById("wallpaperFile")
         .files[0];
 
+
     const title =
         document.getElementById("wallpaperTitle")
-        .value.trim();
+        .value
+        .trim();
+
 
     const status =
         document.getElementById("adminStatus");
+
+
+    const button =
+        document.getElementById("uploadButton");
 
 
     if (!file) {
@@ -644,27 +677,56 @@ function uploadWallpaper() {
     }
 
 
-    const reader =
-        new FileReader();
+    button.disabled = true;
+
+    button.innerText =
+        "⏳ Uploading...";
+
+    status.innerText =
+        "Uploading wallpaper...";
 
 
-    reader.onload = function(event) {
+    try {
 
-        wallpapers.unshift({
-
-            title: title,
-
-            image: event.target.result,
-
-            createdAt: Date.now()
-
-        });
+        const image =
+            await fileToDataURL(file);
 
 
-        localStorage.setItem(
-            "animeWallpapers",
-            JSON.stringify(wallpapers)
-        );
+        const response =
+            await fetch(
+                "/api/wallpapers",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        title: title,
+                        image: image
+                    })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "Upload failed"
+            );
+
+        }
+
+
+        status.innerText =
+            "✅ Wallpaper published!";
 
 
         document.getElementById(
@@ -677,16 +739,56 @@ function uploadWallpaper() {
         ).value = "";
 
 
+        await loadWallpapers();
+
+
+    } catch (error) {
+
+        console.error(error);
+
         status.innerText =
-            "✅ Wallpaper published!";
+            "❌ " + error.message;
+
+    }
 
 
-        renderWallpapers();
+    button.disabled = false;
 
-    };
+    button.innerText =
+        "📤 Publish Wallpaper";
+
+}
 
 
-    reader.readAsDataURL(file);
+/* =========================
+   FILE → BASE64
+========================= */
+
+function fileToDataURL(file) {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            const reader =
+                new FileReader();
+
+
+            reader.onload = () => {
+
+                resolve(
+                    reader.result
+                );
+
+            };
+
+
+            reader.onerror = reject;
+
+
+            reader.readAsDataURL(file);
+
+        }
+    );
 
 }
 
@@ -704,19 +806,11 @@ function setNormal(index, type) {
     if (!wallpaper) return;
 
 
-    /*
-       Website cannot directly change
-       Android Home/Lock wallpaper.
-
-       Android APK will connect these
-       buttons to WallpaperManager.
-    */
-
     alert(
         "📱 " +
         type.toUpperCase() +
         " WALLPAPER\n\n" +
-        "Android app version-il direct wallpaper setting connect cheyyum."
+        "Android APK version-il direct wallpaper setting connect cheyyum."
     );
 
 }
@@ -737,6 +831,7 @@ function openLive(index) {
 
     const liveView =
         document.getElementById("liveView");
+
 
     const liveImage =
         document.getElementById("liveImage");
@@ -771,12 +866,6 @@ function closeLive() {
 
 function setLiveWallpaper() {
 
-    /*
-       Actual Android Live Wallpaper
-       will be connected later using
-       Android WallpaperService.
-    */
-
     alert(
         "✨ Live Wallpaper\n\n" +
         "Android APK version-il ee motion wallpaper direct Live Wallpaper aayi set cheyyum."
@@ -789,7 +878,7 @@ function setLiveWallpaper() {
    DOWNLOAD
 ========================= */
 
-function downloadWallpaper(index) {
+async function downloadWallpaper(index) {
 
     const wallpaper =
         wallpapers[index];
@@ -798,26 +887,57 @@ function downloadWallpaper(index) {
     if (!wallpaper) return;
 
 
-    const link =
-        document.createElement("a");
+    try {
+
+        const response =
+            await fetch(wallpaper.image);
 
 
-    link.href =
-        wallpaper.image;
+        const blob =
+            await response.blob();
 
 
-    link.download =
-        wallpaper.title
-            .replace(/[^a-z0-9]/gi, "-")
-            .toLowerCase() +
-        ".jpg";
+        const url =
+            URL.createObjectURL(blob);
 
 
-    document.body.appendChild(link);
+        const link =
+            document.createElement("a");
 
-    link.click();
 
-    document.body.removeChild(link);
+        link.href = url;
+
+
+        link.download =
+            wallpaper.title
+                .replace(
+                    /[^a-z0-9]/gi,
+                    "-"
+                )
+                .toLowerCase() +
+            ".jpg";
+
+
+        document.body.appendChild(link);
+
+
+        link.click();
+
+
+        document.body.removeChild(link);
+
+
+        URL.revokeObjectURL(url);
+
+
+    } catch (error) {
+
+        window.open(
+            wallpaper.image,
+            "_blank"
+        );
+
+    }
 
 }
 
@@ -826,9 +946,9 @@ function downloadWallpaper(index) {
    START
 ========================= */
 
-renderWallpapers();
+loadWallpapers();
 
 </script>
 
 </body>
-        </html>
+</html>
