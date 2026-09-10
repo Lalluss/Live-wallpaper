@@ -617,29 +617,11 @@ async function toggleAdmin() {
 
     const box = document.getElementById("adminBox");
 
-    // Already logged in
-    if (document.cookie.includes("admin_session=")) {
-
-        if (box.style.display === "block") {
-            box.style.display = "none";
-        } else {
-            box.style.display = "block";
-        }
-
-        return;
-    }
-
-
-    // Ask for admin password
-    const password = prompt(
-        "🔐 Enter Admin Password"
-    );
-
+    const password = prompt("🔐 Enter Admin Password");
 
     if (!password) {
         return;
     }
-
 
     try {
 
@@ -647,42 +629,32 @@ async function toggleAdmin() {
             "/api/admin-login",
             {
                 method: "POST",
-
                 headers: {
-                    "Content-Type":
-                        "application/json"
+                    "Content-Type": "application/json"
                 },
-
                 body: JSON.stringify({
                     password: password
                 })
             }
         );
 
-
-        const data =
-            await response.json();
-
+        const data = await response.json();
 
         if (!response.ok) {
 
             alert(
                 "❌ " +
-                (data.error ||
-                    "Wrong password")
+                (data.error || "Wrong password")
             );
 
             return;
         }
 
-
         if (data.success) {
 
             box.style.display = "block";
 
-            alert(
-                "✅ Admin login successful!"
-            );
+            alert("✅ Admin login successful!");
 
         }
 
@@ -695,8 +667,7 @@ async function toggleAdmin() {
         );
 
     }
-}
-
+    }
 /* =========================
    UPLOAD WALLPAPER
 ========================= */
