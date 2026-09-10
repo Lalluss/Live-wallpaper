@@ -2,8 +2,12 @@ package com.animwall.app;
 
 import android.app.Activity;
 import android.app.WallpaperManager;
+import android.content.ComponentName;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.Button;
@@ -23,12 +27,21 @@ import java.util.ArrayList;
 
 public class MainActivity extends Activity {
 
-    private final ArrayList<Bitmap> wallpapers = new ArrayList<>();
+    private final ArrayList<Bitmap> wallpapers =
+            new ArrayList<>();
 
     private LinearLayout wallpaperContainer;
 
+    private static final String PREFS_NAME =
+            "AnimeWallPrefs";
+
+    private static final String LIVE_WALLPAPER_URL =
+            "live_wallpaper_url";
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
 
         createUI();
@@ -39,9 +52,12 @@ public class MainActivity extends Activity {
 
     private void createUI() {
 
-        ScrollView scrollView = new ScrollView(this);
+        ScrollView scrollView =
+                new ScrollView(this);
 
-        wallpaperContainer = new LinearLayout(this);
+        wallpaperContainer =
+                new LinearLayout(this);
+
         wallpaperContainer.setOrientation(
                 LinearLayout.VERTICAL
         );
@@ -63,12 +79,23 @@ public class MainActivity extends Activity {
 
     private void addTitle() {
 
-        TextView title = new TextView(this);
+        TextView title =
+                new TextView(this);
 
         title.setText("AnimeWall");
+
         title.setTextSize(32);
-        title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 0, 0, 30);
+
+        title.setGravity(
+                Gravity.CENTER
+        );
+
+        title.setPadding(
+                0,
+                0,
+                0,
+                30
+        );
 
         wallpaperContainer.addView(title);
     }
@@ -80,18 +107,26 @@ public class MainActivity extends Activity {
 
             try {
 
-                URL apiUrl = new URL(
-                        "https://live-wallpaper-theta.vercel.app/api/wallpapers"
-                );
+                URL apiUrl =
+                        new URL(
+                                "https://live-wallpaper-theta.vercel.app/api/wallpapers"
+                        );
 
                 HttpURLConnection connection =
                         (HttpURLConnection)
                                 apiUrl.openConnection();
 
-                connection.setRequestMethod("GET");
+                connection.setRequestMethod(
+                        "GET"
+                );
 
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(15000);
+                connection.setConnectTimeout(
+                        15000
+                );
+
+                connection.setReadTimeout(
+                        15000
+                );
 
                 InputStream input =
                         connection.getInputStream();
@@ -105,7 +140,8 @@ public class MainActivity extends Activity {
                 int length;
 
                 while (
-                        (length = input.read(buffer)) != -1
+                        (length =
+                                input.read(buffer)) != -1
                 ) {
 
                     result.append(
@@ -147,14 +183,17 @@ public class MainActivity extends Activity {
                     }
 
 
-                    for (int i = 0;
-                         i < array.length();
-                         i++) {
+                    for (
+                            int i = 0;
+                            i < array.length();
+                            i++
+                    ) {
 
                         try {
 
                             JSONObject item =
                                     array.getJSONObject(i);
+
 
                             String title =
                                     item.optString(
@@ -162,13 +201,17 @@ public class MainActivity extends Activity {
                                             "Wallpaper"
                                     );
 
+
                             String imageUrl =
                                     item.optString(
                                             "image",
                                             ""
                                     );
 
-                            if (!imageUrl.isEmpty()) {
+
+                            if (
+                                    !imageUrl.isEmpty()
+                            ) {
 
                                 addWallpaperCard(
                                         title,
@@ -225,7 +268,9 @@ public class MainActivity extends Activity {
                 new TextView(this);
 
         name.setText(title);
+
         name.setTextSize(22);
+
         name.setPadding(
                 0,
                 10,
@@ -250,6 +295,7 @@ public class MainActivity extends Activity {
                         750
                 );
 
+
         card.addView(name);
 
         card.addView(
@@ -258,6 +304,7 @@ public class MainActivity extends Activity {
         );
 
 
+        // HOME BUTTON
         Button home =
                 new Button(this);
 
@@ -266,6 +313,7 @@ public class MainActivity extends Activity {
         );
 
 
+        // LOCK BUTTON
         Button lock =
                 new Button(this);
 
@@ -274,6 +322,7 @@ public class MainActivity extends Activity {
         );
 
 
+        // BOTH BUTTON
         Button both =
                 new Button(this);
 
@@ -282,9 +331,22 @@ public class MainActivity extends Activity {
         );
 
 
+        // LIVE BUTTON
+        Button live =
+                new Button(this);
+
+        live.setText(
+                "✨ SET LIVE WALLPAPER"
+        );
+
+
         card.addView(home);
+
         card.addView(lock);
+
         card.addView(both);
+
+        card.addView(live);
 
 
         wallpaperContainer.addView(card);
@@ -310,13 +372,16 @@ public class MainActivity extends Activity {
                         15000
                 );
 
+
                 InputStream input =
                         connection.getInputStream();
+
 
                 Bitmap bitmap =
                         BitmapFactory.decodeStream(
                                 input
                         );
+
 
                 input.close();
 
@@ -328,11 +393,16 @@ public class MainActivity extends Activity {
                     int position =
                             wallpapers.size();
 
+
                     wallpapers.add(bitmap);
 
-                    image.setImageBitmap(bitmap);
+
+                    image.setImageBitmap(
+                            bitmap
+                    );
 
 
+                    // HOME
                     home.setOnClickListener(v ->
                             setWallpaper(
                                     position,
@@ -341,6 +411,7 @@ public class MainActivity extends Activity {
                     );
 
 
+                    // LOCK
                     lock.setOnClickListener(v ->
                             setWallpaper(
                                     position,
@@ -349,11 +420,20 @@ public class MainActivity extends Activity {
                     );
 
 
+                    // BOTH
                     both.setOnClickListener(v ->
                             setWallpaper(
                                     position,
                                     WallpaperManager.FLAG_SYSTEM |
-                                    WallpaperManager.FLAG_LOCK
+                                            WallpaperManager.FLAG_LOCK
+                            )
+                    );
+
+
+                    // LIVE
+                    live.setOnClickListener(v ->
+                            openLiveWallpaper(
+                                    imageUrl
                             )
                     );
 
@@ -375,6 +455,12 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+
+    /*
+     * ==========================================
+     * SET NORMAL WALLPAPER
+     * ==========================================
+     */
 
     private void setWallpaper(
             int position,
@@ -427,6 +513,7 @@ public class MainActivity extends Activity {
 
             e.printStackTrace();
 
+
             Toast.makeText(
                     this,
                     "❌ Failed to set wallpaper",
@@ -436,6 +523,98 @@ public class MainActivity extends Activity {
     }
 
 
+    /*
+     * ==========================================
+     * OPEN LIVE WALLPAPER
+     * ==========================================
+     */
+
+    private void openLiveWallpaper(
+            String imageUrl
+    ) {
+
+        try {
+
+            /*
+             * Save selected wallpaper URL
+             * so LiveWallpaperService can read it.
+             */
+
+            SharedPreferences preferences =
+                    getSharedPreferences(
+                            PREFS_NAME,
+                            MODE_PRIVATE
+                    );
+
+
+            preferences.edit()
+                    .putString(
+                            LIVE_WALLPAPER_URL,
+                            imageUrl
+                    )
+                    .apply();
+
+
+            /*
+             * Open Android Live Wallpaper
+             * confirmation/setup screen.
+             */
+
+            if (Build.VERSION.SDK_INT >=
+                    Build.VERSION_CODES.N) {
+
+                Intent intent =
+                        new Intent(
+                                WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER
+                        );
+
+
+                ComponentName componentName =
+                        new ComponentName(
+                                this,
+                                LiveWallpaperService.class
+                        );
+
+
+                intent.putExtra(
+                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        componentName
+                );
+
+
+                startActivity(intent);
+
+            } else {
+
+                Intent intent =
+                        new Intent(
+                                WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER
+                        );
+
+                startActivity(intent);
+            }
+
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+
+            Toast.makeText(
+                    this,
+                    "❌ Live Wallpaper setup failed",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+
+    /*
+     * ==========================================
+     * MESSAGE
+     * ==========================================
+     */
+
     private void showMessage(
             String message
     ) {
@@ -444,10 +623,20 @@ public class MainActivity extends Activity {
                 new TextView(this);
 
         text.setText(message);
+
         text.setTextSize(18);
-        text.setGravity(Gravity.CENTER);
-        text.setPadding(0, 30, 0, 30);
+
+        text.setGravity(
+                Gravity.CENTER
+        );
+
+        text.setPadding(
+                0,
+                30,
+                0,
+                30
+        );
 
         wallpaperContainer.addView(text);
     }
-                                }
+}
