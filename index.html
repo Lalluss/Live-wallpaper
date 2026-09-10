@@ -629,6 +629,153 @@ function renderWallpapers() {
     );
 }
 
+/* =========================
+   ADMIN EDIT WALLPAPER
+========================= */
+
+async function editWallpaper(index) {
+
+    if (!isAdmin) {
+        alert("❌ Admin login required.");
+        return;
+    }
+
+    const wallpaper = wallpapers[index];
+
+    if (!wallpaper) {
+        alert("❌ Wallpaper not found.");
+        return;
+    }
+
+    const newTitle = prompt(
+        "✏️ Enter new wallpaper title:",
+        wallpaper.title
+    );
+
+    if (newTitle === null) {
+        return;
+    }
+
+    const title = newTitle.trim();
+
+    if (!title) {
+        alert("❌ Title cannot be empty.");
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            "/api/wallpapers",
+            {
+                method: "PUT",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+                    metadataUrl: wallpaper.metadataUrl,
+                    title: title
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+
+            alert(
+                "❌ " +
+                (data.error || "Edit failed")
+            );
+
+            return;
+        }
+
+        alert("✅ Wallpaper updated!");
+
+        await loadWallpapers();
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "❌ Failed to edit wallpaper."
+        );
+    }
+}
+
+
+/* =========================
+   ADMIN DELETE WALLPAPER
+========================= */
+
+async function deleteWallpaper(index) {
+
+    if (!isAdmin) {
+        alert("❌ Admin login required.");
+        return;
+    }
+
+    const wallpaper = wallpapers[index];
+
+    if (!wallpaper) {
+        alert("❌ Wallpaper not found.");
+        return;
+    }
+
+    const confirmed = confirm(
+        `🗑️ Delete "${wallpaper.title}"?\n\nThis cannot be undone.`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            "/api/wallpapers",
+            {
+                method: "DELETE",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+                    metadataUrl: wallpaper.metadataUrl
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+
+            alert(
+                "❌ " +
+                (data.error || "Delete failed")
+            );
+
+            return;
+        }
+
+        alert("🗑️ Wallpaper deleted!");
+
+        await loadWallpapers();
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "❌ Failed to delete wallpaper."
+        );
+    }
+}
 
 /* =========================
    ESCAPE HTML
@@ -722,6 +869,8 @@ async function logoutAdmin() {
         const data = await response.json();
 
         if (data.success) {
+
+            isAdmin = false;
 
             document.getElementById("adminBox").style.display = "none";
 
