@@ -10,6 +10,10 @@
     <uses-permission
         android:name="android.permission.SET_WALLPAPER" />
 
+    <!-- Sensors for 3D parallax movement -->
+    <uses-permission
+        android:name="android.permission.BODY_SENSORS" />
+
     <application
         android:allowBackup="true"
         android:label="AnimeWall"
@@ -32,6 +36,11 @@
 
         </activity>
 
+        <!-- 3D Wallpaper Preview -->
+        <activity
+            android:name=".ThreeDWallpaperActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
 
         <!-- Live Wallpaper Service -->
         <service
