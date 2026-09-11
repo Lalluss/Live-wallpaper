@@ -29,6 +29,18 @@ jobs:
         run: |
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
+      - name: Download AI segmentation model
+        run: |
+          mkdir -p android/app/src/main/assets
+
+          curl -L --fail --retry 3 \
+            "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite" \
+            -o android/app/src/main/assets/selfie_multiclass_256x256.tflite
+
+          echo "AI model downloaded successfully"
+
+          ls -lh android/app/src/main/assets/
+
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
