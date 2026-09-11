@@ -338,13 +338,6 @@ public class MainActivity extends Activity {
         live.setText(
                 "✨ SET LIVE WALLPAPER"
         );
-
-        // 3D WALL BUTTON
-        Button wall3D = new Button(this);
-        wall3D.setText("🧊 3D WALL");
-        wall3D.setOnClickListener(v ->
-                                  open3DWallpaper(imageUrl)
-                                 );
         
         card.addView(wall3D);
 
