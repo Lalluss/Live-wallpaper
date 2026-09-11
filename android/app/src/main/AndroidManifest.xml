@@ -36,11 +36,7 @@
 
         </activity>
 
-        <!-- 3D Wallpaper Preview -->
-        <activity
-            android:name=".ThreeDWallpaperActivity"
-            android:screenOrientation="portrait"
-            android:exported="false" />
+
 
         <!-- Live Wallpaper Service -->
         <service
