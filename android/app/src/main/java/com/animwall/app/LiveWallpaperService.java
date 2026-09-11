@@ -37,41 +37,41 @@ public class LiveWallpaperService extends WallpaperService {
 
         private boolean visible = false;
 
-        private EGLDisplay eglDisplay;
-        private EGLContext eglContext;
-        private EGLSurface eglSurface;
+        private EGLDisplay eglDisplay = EGL14.EGL_NO_DISPLAY;
+        private EGLContext eglContext = EGL14.EGL_NO_CONTEXT;
+        private EGLSurface eglSurface = EGL14.EGL_NO_SURFACE;
 
-        private int program;
-        private int textureId;
+        private int program = 0;
+        private int textureId = 0;
 
-        private int positionHandle;
-        private int texCoordHandle;
-        private int textureHandle;
-        private int timeHandle;
-        private int resolutionHandle;
+        private int positionHandle = -1;
+        private int texCoordHandle = -1;
+        private int textureHandle = -1;
+        private int timeHandle = -1;
+        private int resolutionHandle = -1;
 
         private int surfaceWidth = 1;
         private int surfaceHeight = 1;
 
         private Bitmap bitmap;
 
-        private final FloatBuffer vertexBuffer;
-        private final FloatBuffer texBuffer;
-
         private long startTime;
 
+        private final FloatBuffer vertexBuffer;
+        private final FloatBuffer texCoordBuffer;
+
         private final float[] vertices = {
-                -1f, -1f,
-                 1f, -1f,
-                -1f,  1f,
-                 1f,  1f
+                -1.0f, -1.0f,
+                 1.0f, -1.0f,
+                -1.0f,  1.0f,
+                 1.0f,  1.0f
         };
 
         private final float[] texCoords = {
-                0f, 1f,
-                1f, 1f,
-                0f, 0f,
-                1f, 0f
+                0.0f, 1.0f,
+                1.0f, 1.0f,
+                0.0f, 0.0f,
+                1.0f, 0.0f
         };
 
         private final Runnable drawRunnable = new Runnable() {
@@ -95,13 +95,13 @@ public class LiveWallpaperService extends WallpaperService {
             vertexBuffer.put(vertices);
             vertexBuffer.position(0);
 
-            texBuffer = ByteBuffer
+            texCoordBuffer = ByteBuffer
                     .allocateDirect(texCoords.length * 4)
                     .order(ByteOrder.nativeOrder())
                     .asFloatBuffer();
 
-            texBuffer.put(texCoords);
-            texBuffer.position(0);
+            texCoordBuffer.put(texCoords);
+            texCoordBuffer.position(0);
         }
 
         @Override
@@ -112,6 +112,10 @@ public class LiveWallpaperService extends WallpaperService {
 
             loadWallpaper();
         }
+
+        // ============================================================
+        // LOAD SELECTED WALLPAPER
+        // ============================================================
 
         private void loadWallpaper() {
 
@@ -133,29 +137,27 @@ public class LiveWallpaperService extends WallpaperService {
 
             new Thread(() -> {
 
+                HttpURLConnection connection = null;
+                InputStream input = null;
+
                 try {
 
                     URL url = new URL(imageUrl);
 
-                    HttpURLConnection connection =
+                    connection =
                             (HttpURLConnection) url.openConnection();
 
+                    connection.setRequestMethod("GET");
                     connection.setConnectTimeout(15000);
                     connection.setReadTimeout(15000);
-
                     connection.setDoInput(true);
 
                     connection.connect();
 
-                    InputStream input =
-                            connection.getInputStream();
+                    input = connection.getInputStream();
 
                     Bitmap loadedBitmap =
                             BitmapFactory.decodeStream(input);
-
-                    input.close();
-
-                    connection.disconnect();
 
                     if (loadedBitmap == null) {
                         return;
@@ -174,10 +176,27 @@ public class LiveWallpaperService extends WallpaperService {
                 } catch (Exception e) {
 
                     e.printStackTrace();
+
+                } finally {
+
+                    try {
+                        if (input != null) {
+                            input.close();
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
                 }
 
             }).start();
         }
+
+        // ============================================================
+        // VISIBILITY
+        // ============================================================
 
         @Override
         public void onVisibilityChanged(boolean isVisible) {
@@ -196,20 +215,46 @@ public class LiveWallpaperService extends WallpaperService {
             }
         }
 
+        // ============================================================
+        // SURFACE CREATED
+        // ============================================================
+
         @Override
         public void onSurfaceCreated(SurfaceHolder holder) {
 
             super.onSurfaceCreated(holder);
 
-            surfaceWidth = holder.getSurfaceFrame().width();
-            surfaceHeight = holder.getSurfaceFrame().height();
+            surfaceWidth =
+                    holder.getSurfaceFrame().width();
 
-            initOpenGL(holder);
+            surfaceHeight =
+                    holder.getSurfaceFrame().height();
 
-            if (bitmap != null) {
-                uploadTexture();
+            if (surfaceWidth <= 0) {
+                surfaceWidth = 1080;
+            }
+
+            if (surfaceHeight <= 0) {
+                surfaceHeight = 1920;
+            }
+
+            startTime = System.currentTimeMillis();
+
+            initializeEGL(holder);
+
+            if (eglContext != EGL14.EGL_NO_CONTEXT) {
+
+                initializeShader();
+
+                if (bitmap != null) {
+                    uploadTexture();
+                }
             }
         }
+
+        // ============================================================
+        // SURFACE CHANGED
+        // ============================================================
 
         @Override
         public void onSurfaceChanged(
@@ -226,37 +271,63 @@ public class LiveWallpaperService extends WallpaperService {
                     height
             );
 
-            surfaceWidth = width;
-            surfaceHeight = height;
+            surfaceWidth = Math.max(width, 1);
+            surfaceHeight = Math.max(height, 1);
 
-            if (eglContext != null) {
+            if (eglContext != EGL14.EGL_NO_CONTEXT) {
+
+                makeCurrent();
 
                 GLES20.glViewport(
                         0,
                         0,
-                        width,
-                        height
+                        surfaceWidth,
+                        surfaceHeight
                 );
             }
+
+            drawFrame();
         }
 
-        private void initOpenGL(SurfaceHolder holder) {
+        // ============================================================
+        // EGL INITIALIZATION
+        // ============================================================
 
-            eglDisplay = EGL14.eglGetDisplay(
-                    EGL14.EGL_DEFAULT_DISPLAY
-            );
+        private void initializeEGL(SurfaceHolder holder) {
+
+            releaseEGL();
+
+            eglDisplay =
+                    EGL14.eglGetDisplay(
+                            EGL14.EGL_DEFAULT_DISPLAY
+                    );
+
+            if (eglDisplay == EGL14.EGL_NO_DISPLAY) {
+                throw new RuntimeException(
+                        "Unable to get EGL display"
+                );
+            }
 
             int[] version = new int[2];
 
-            EGL14.eglInitialize(
+            if (!EGL14.eglInitialize(
                     eglDisplay,
                     version,
                     0,
                     version,
                     1
-            );
+            )) {
+
+                throw new RuntimeException(
+                        "Unable to initialize EGL"
+                );
+            }
 
             int[] configAttributes = {
+
+                    EGL14.EGL_SURFACE_TYPE,
+                    EGL14.EGL_WINDOW_BIT,
+
                     EGL14.EGL_RENDERABLE_TYPE,
                     EGL14.EGL_OPENGL_ES2_BIT,
 
@@ -275,30 +346,46 @@ public class LiveWallpaperService extends WallpaperService {
                     EGL14.EGL_DEPTH_SIZE,
                     0,
 
+                    EGL14.EGL_STENCIL_SIZE,
+                    0,
+
                     EGL14.EGL_NONE
             };
 
             EGLConfig[] configs =
                     new EGLConfig[1];
 
-            int[] numConfigs = new int[1];
+            int[] numConfigs =
+                    new int[1];
 
-            EGL14.eglChooseConfig(
-                    eglDisplay,
-                    configAttributes,
-                    0,
-                    configs,
-                    0,
-                    1,
-                    numConfigs,
-                    0
-            );
+            boolean configFound =
+                    EGL14.eglChooseConfig(
+                            eglDisplay,
+                            configAttributes,
+                            0,
+                            configs,
+                            0,
+                            1,
+                            numConfigs,
+                            0
+                    );
+
+            if (!configFound ||
+                    numConfigs[0] <= 0 ||
+                    configs[0] == null) {
+
+                throw new RuntimeException(
+                        "No suitable EGL configuration"
+                );
+            }
 
             EGLConfig config = configs[0];
 
             int[] contextAttributes = {
+
                     EGL14.EGL_CONTEXT_CLIENT_VERSION,
                     2,
+
                     EGL14.EGL_NONE
             };
 
@@ -310,6 +397,14 @@ public class LiveWallpaperService extends WallpaperService {
                             contextAttributes,
                             0
                     );
+
+            if (eglContext == EGL14.EGL_NO_CONTEXT) {
+
+                throw new RuntimeException(
+                        "Unable to create EGL context: "
+                                + getEglError()
+                );
+            }
 
             int[] surfaceAttributes = {
                     EGL14.EGL_NONE
@@ -324,28 +419,89 @@ public class LiveWallpaperService extends WallpaperService {
                             0
                     );
 
-            EGL14.eglMakeCurrent(
-                    eglDisplay,
-                    eglSurface,
-                    eglSurface,
-                    eglContext
-            );
+            if (eglSurface == EGL14.EGL_NO_SURFACE) {
 
-            String vertexShader =
+                throw new RuntimeException(
+                        "Unable to create EGL surface: "
+                                + getEglError()
+                );
+            }
+
+            makeCurrent();
+
+            GLES20.glViewport(
+                    0,
+                    0,
+                    surfaceWidth,
+                    surfaceHeight
+            );
+        }
+
+        private void makeCurrent() {
+
+            if (eglDisplay == EGL14.EGL_NO_DISPLAY ||
+                    eglSurface == EGL14.EGL_NO_SURFACE ||
+                    eglContext == EGL14.EGL_NO_CONTEXT) {
+
+                return;
+            }
+
+            boolean success =
+                    EGL14.eglMakeCurrent(
+                            eglDisplay,
+                            eglSurface,
+                            eglSurface,
+                            eglContext
+                    );
+
+            if (!success) {
+
+                throw new RuntimeException(
+                        "eglMakeCurrent failed: "
+                                + getEglError()
+                );
+            }
+        }
+
+        private String getEglError() {
+
+            return "0x" +
+                    Integer.toHexString(
+                            EGL14.eglGetError()
+                    );
+        }
+
+        // ============================================================
+        // SHADER
+        // ============================================================
+
+        private void initializeShader() {
+
+            String vertexShaderSource =
+
                     "attribute vec2 aPosition;" +
+
                     "attribute vec2 aTexCoord;" +
+
                     "varying vec2 vTexCoord;" +
 
                     "void main() {" +
-                    "    gl_Position = vec4(aPosition, 0.0, 1.0);" +
+
+                    "    gl_Position = vec4(" +
+                    "        aPosition, 0.0, 1.0);" +
+
                     "    vTexCoord = aTexCoord;" +
+
                     "}";
 
-            String fragmentShader =
+            String fragmentShaderSource =
+
                     "precision mediump float;" +
 
                     "uniform sampler2D uTexture;" +
+
                     "uniform float uTime;" +
+
                     "uniform vec2 uResolution;" +
 
                     "varying vec2 vTexCoord;" +
@@ -356,65 +512,108 @@ public class LiveWallpaperService extends WallpaperService {
 
                     "    float t = uTime;" +
 
-                    "    // Gentle vertical wave" +
-                    "    float wave1 = sin(uv.y * 12.0 + t * 1.2);" +
+                    // Very gentle vertical flowing movement
+                    "    float waveA = sin(" +
+                    "        uv.y * 14.0 + t * 0.8" +
+                    "    );" +
 
-                    "    float wave2 = sin(uv.y * 25.0 - t * 0.8);" +
+                    "    float waveB = sin(" +
+                    "        uv.y * 28.0 - t * 0.55" +
+                    "    );" +
 
                     "    float movement = " +
-                    "        (wave1 * 0.0015 + wave2 * 0.0007);" +
+                    "        waveA * 0.0009 +" +
+                    "        waveB * 0.00035;" +
 
-                    "    // Stronger movement near image edges" +
-                    "    float edge = " +
-                    "        smoothstep(0.15, 0.75, uv.y);" +
+                    // Movement stronger away from center
+                    "    float edgeMask = " +
+                    "        smoothstep(0.10, 0.80, uv.y);" +
 
-                    "    uv.x += movement * edge;" +
+                    "    uv.x += movement * edgeMask;" +
 
-                    "    // Very subtle breathing movement" +
+                    // Tiny breathing effect
                     "    float zoom = " +
-                    "        1.0 + sin(t * 0.35) * 0.006;" +
+                    "        1.0 +" +
+                    "        sin(t * 0.25) * 0.003;" +
 
-                    "    uv = (uv - 0.5) / zoom + 0.5;" +
+                    "    uv = " +
+                    "        (uv - 0.5) / zoom + 0.5;" +
 
-                    "    // Soft atmospheric distortion" +
-                    "    float atmosphere = " +
-                    "        sin((uv.x + uv.y) * 8.0 + t * 0.5) * 0.001;" +
-
-                    "    uv.x += atmosphere;" +
+                    // Keep texture coordinates valid
+                    "    uv = clamp(" +
+                    "        uv, " +
+                    "        vec2(0.001), " +
+                    "        vec2(0.999)" +
+                    "    );" +
 
                     "    vec4 color = " +
-                    "        texture2D(uTexture, uv);" +
+                    "        texture2D(" +
+                    "            uTexture," +
+                    "            uv" +
+                    "        );" +
 
                     "    gl_FragColor = color;" +
 
                     "}";
 
-            int vertexShaderId =
+            int vertexShader =
                     compileShader(
                             GLES20.GL_VERTEX_SHADER,
-                            vertexShader
+                            vertexShaderSource
                     );
 
-            int fragmentShaderId =
+            int fragmentShader =
                     compileShader(
                             GLES20.GL_FRAGMENT_SHADER,
-                            fragmentShader
+                            fragmentShaderSource
                     );
 
             program =
                     GLES20.glCreateProgram();
 
+            if (program == 0) {
+
+                throw new RuntimeException(
+                        "Unable to create GL program"
+                );
+            }
+
             GLES20.glAttachShader(
                     program,
-                    vertexShaderId
+                    vertexShader
             );
 
             GLES20.glAttachShader(
                     program,
-                    fragmentShaderId
+                    fragmentShader
             );
 
             GLES20.glLinkProgram(program);
+
+            int[] linkStatus = new int[1];
+
+            GLES20.glGetProgramiv(
+                    program,
+                    GLES20.GL_LINK_STATUS,
+                    linkStatus,
+                    0
+            );
+
+            if (linkStatus[0] == 0) {
+
+                String error =
+                        GLES20.glGetProgramInfoLog(
+                                program
+                        );
+
+                GLES20.glDeleteProgram(program);
+
+                program = 0;
+
+                throw new RuntimeException(
+                        "Program link error: " + error
+                );
+            }
 
             positionHandle =
                     GLES20.glGetAttribLocation(
@@ -446,15 +645,8 @@ public class LiveWallpaperService extends WallpaperService {
                             "uResolution"
                     );
 
-            GLES20.glViewport(
-                    0,
-                    0,
-                    surfaceWidth,
-                    surfaceHeight
-            );
-
-            startTime =
-                    System.currentTimeMillis();
+            GLES20.glDeleteShader(vertexShader);
+            GLES20.glDeleteShader(fragmentShader);
         }
 
         private int compileShader(
@@ -465,6 +657,13 @@ public class LiveWallpaperService extends WallpaperService {
             int shader =
                     GLES20.glCreateShader(type);
 
+            if (shader == 0) {
+
+                throw new RuntimeException(
+                        "Unable to create shader"
+                );
+            }
+
             GLES20.glShaderSource(
                     shader,
                     source
@@ -472,16 +671,17 @@ public class LiveWallpaperService extends WallpaperService {
 
             GLES20.glCompileShader(shader);
 
-            int[] status = new int[1];
+            int[] compileStatus =
+                    new int[1];
 
             GLES20.glGetShaderiv(
                     shader,
                     GLES20.GL_COMPILE_STATUS,
-                    status,
+                    compileStatus,
                     0
             );
 
-            if (status[0] == 0) {
+            if (compileStatus[0] == 0) {
 
                 String error =
                         GLES20.glGetShaderInfoLog(
@@ -498,11 +698,19 @@ public class LiveWallpaperService extends WallpaperService {
             return shader;
         }
 
+        // ============================================================
+        // TEXTURE
+        // ============================================================
+
         private void uploadTexture() {
 
-            if (bitmap == null || eglContext == null) {
+            if (bitmap == null ||
+                    eglContext == EGL14.EGL_NO_CONTEXT) {
+
                 return;
             }
+
+            makeCurrent();
 
             if (textureId != 0) {
 
@@ -519,7 +727,8 @@ public class LiveWallpaperService extends WallpaperService {
                 textureId = 0;
             }
 
-            int[] textures = new int[1];
+            int[] textures =
+                    new int[1];
 
             GLES20.glGenTextures(
                     1,
@@ -527,7 +736,8 @@ public class LiveWallpaperService extends WallpaperService {
                     0
             );
 
-            textureId = textures[0];
+            textureId =
+                    textures[0];
 
             GLES20.glBindTexture(
                     GLES20.GL_TEXTURE_2D,
@@ -571,15 +781,28 @@ public class LiveWallpaperService extends WallpaperService {
             );
         }
 
+        // ============================================================
+        // DRAW
+        // ============================================================
+
         private void drawFrame() {
 
             if (!visible) {
                 return;
             }
 
-            if (eglDisplay == null ||
-                    eglSurface == null ||
-                    eglContext == null) {
+            if (eglDisplay ==
+                    EGL14.EGL_NO_DISPLAY) {
+                return;
+            }
+
+            if (eglContext ==
+                    EGL14.EGL_NO_CONTEXT) {
+                return;
+            }
+
+            if (eglSurface ==
+                    EGL14.EGL_NO_SURFACE) {
                 return;
             }
 
@@ -587,133 +810,142 @@ public class LiveWallpaperService extends WallpaperService {
                 return;
             }
 
-            if (bitmap != null &&
-                    textureId == 0) {
-
-                uploadTexture();
-            }
+            makeCurrent();
 
             if (textureId == 0) {
-                return;
+
+                if (bitmap != null) {
+                    uploadTexture();
+                } else {
+                    return;
+                }
             }
 
-            try {
+            GLES20.glViewport(
+                    0,
+                    0,
+                    surfaceWidth,
+                    surfaceHeight
+            );
 
-                EGL14.eglMakeCurrent(
-                        eglDisplay,
-                        eglSurface,
-                        eglSurface,
-                        eglContext
-                );
+            GLES20.glClearColor(
+                    0.0f,
+                    0.0f,
+                    0.0f,
+                    1.0f
+            );
 
-                GLES20.glViewport(
-                        0,
-                        0,
-                        surfaceWidth,
-                        surfaceHeight
-                );
+            GLES20.glClear(
+                    GLES20.GL_COLOR_BUFFER_BIT
+            );
 
-                GLES20.glClearColor(
-                        0f,
-                        0f,
-                        0f,
-                        1f
-                );
+            GLES20.glUseProgram(program);
 
-                GLES20.glClear(
-                        GLES20.GL_COLOR_BUFFER_BIT
-                );
+            // Position
+            vertexBuffer.position(0);
 
-                GLES20.glUseProgram(program);
+            GLES20.glEnableVertexAttribArray(
+                    positionHandle
+            );
 
-                vertexBuffer.position(0);
+            GLES20.glVertexAttribPointer(
+                    positionHandle,
+                    2,
+                    GLES20.GL_FLOAT,
+                    false,
+                    0,
+                    vertexBuffer
+            );
 
-                GLES20.glEnableVertexAttribArray(
-                        positionHandle
-                );
+            // Texture coordinates
+            texCoordBuffer.position(0);
 
-                GLES20.glVertexAttribPointer(
-                        positionHandle,
-                        2,
-                        GLES20.GL_FLOAT,
-                        false,
-                        0,
-                        vertexBuffer
-                );
+            GLES20.glEnableVertexAttribArray(
+                    texCoordHandle
+            );
 
-                texBuffer.position(0);
+            GLES20.glVertexAttribPointer(
+                    texCoordHandle,
+                    2,
+                    GLES20.GL_FLOAT,
+                    false,
+                    0,
+                    texCoordBuffer
+            );
 
-                GLES20.glEnableVertexAttribArray(
-                        texCoordHandle
-                );
+            // Texture
+            GLES20.glActiveTexture(
+                    GLES20.GL_TEXTURE0
+            );
 
-                GLES20.glVertexAttribPointer(
-                        texCoordHandle,
-                        2,
-                        GLES20.GL_FLOAT,
-                        false,
-                        0,
-                        texBuffer
-                );
+            GLES20.glBindTexture(
+                    GLES20.GL_TEXTURE_2D,
+                    textureId
+            );
 
-                GLES20.glActiveTexture(
-                        GLES20.GL_TEXTURE0
-                );
+            GLES20.glUniform1i(
+                    textureHandle,
+                    0
+            );
 
-                GLES20.glBindTexture(
-                        GLES20.GL_TEXTURE_2D,
-                        textureId
-                );
+            // Animation time
+            float time =
+                    (System.currentTimeMillis()
+                            - startTime) / 1000.0f;
 
-                GLES20.glUniform1i(
-                        textureHandle,
-                        0
-                );
+            GLES20.glUniform1f(
+                    timeHandle,
+                    time
+            );
 
-                float time =
-                        (System.currentTimeMillis()
-                                - startTime) / 1000f;
+            GLES20.glUniform2f(
+                    resolutionHandle,
+                    (float) surfaceWidth,
+                    (float) surfaceHeight
+            );
 
-                GLES20.glUniform1f(
-                        timeHandle,
-                        time
-                );
+            // Draw fullscreen quad
+            GLES20.glDrawArrays(
+                    GLES20.GL_TRIANGLE_STRIP,
+                    0,
+                    4
+            );
 
-                GLES20.glUniform2f(
-                        resolutionHandle,
-                        surfaceWidth,
-                        surfaceHeight
-                );
+            GLES20.glDisableVertexAttribArray(
+                    positionHandle
+            );
 
-                GLES20.glDrawArrays(
-                        GLES20.GL_TRIANGLE_STRIP,
-                        0,
-                        4
-                );
+            GLES20.glDisableVertexAttribArray(
+                    texCoordHandle
+            );
 
-                GLES20.glDisableVertexAttribArray(
-                        positionHandle
-                );
+            GLES20.glBindTexture(
+                    GLES20.GL_TEXTURE_2D,
+                    0
+            );
 
-                GLES20.glDisableVertexAttribArray(
-                        texCoordHandle
-                );
+            boolean swapped =
+                    EGL14.eglSwapBuffers(
+                            eglDisplay,
+                            eglSurface
+                    );
 
-                GLES20.glBindTexture(
-                        GLES20.GL_TEXTURE_2D,
-                        0
-                );
+            if (!swapped) {
 
-                EGL14.eglSwapBuffers(
-                        eglDisplay,
-                        eglSurface
-                );
+                int error =
+                        EGL14.eglGetError();
 
-            } catch (Exception e) {
+                if (error ==
+                        EGL14.EGL_CONTEXT_LOST) {
 
-                e.printStackTrace();
+                    releaseEGL();
+                }
             }
         }
+
+        // ============================================================
+        // SURFACE DESTROYED
+        // ============================================================
 
         @Override
         public void onSurfaceDestroyed(
@@ -728,39 +960,19 @@ public class LiveWallpaperService extends WallpaperService {
                     drawRunnable
             );
 
-            releaseOpenGL();
+            releaseEGL();
         }
 
-        private void releaseOpenGL() {
+        // ============================================================
+        // EGL CLEANUP
+        // ============================================================
+
+        private void releaseEGL() {
 
             try {
 
-                if (textureId != 0) {
-
-                    int[] textures = {
-                            textureId
-                    };
-
-                    GLES20.glDeleteTextures(
-                            1,
-                            textures,
-                            0
-                    );
-
-                    textureId = 0;
-                }
-
-                if (program != 0) {
-
-                    GLES20.glDeleteProgram(
-                            program
-                    );
-
-                    program = 0;
-                }
-
-                if (eglDisplay != null &&
-                        eglDisplay != EGL14.EGL_NO_DISPLAY) {
+                if (eglDisplay !=
+                        EGL14.EGL_NO_DISPLAY) {
 
                     EGL14.eglMakeCurrent(
                             eglDisplay,
@@ -769,8 +981,8 @@ public class LiveWallpaperService extends WallpaperService {
                             EGL14.EGL_NO_CONTEXT
                     );
 
-                    if (eglSurface != null &&
-                            eglSurface != EGL14.EGL_NO_SURFACE) {
+                    if (eglSurface !=
+                            EGL14.EGL_NO_SURFACE) {
 
                         EGL14.eglDestroySurface(
                                 eglDisplay,
@@ -778,8 +990,8 @@ public class LiveWallpaperService extends WallpaperService {
                         );
                     }
 
-                    if (eglContext != null &&
-                            eglContext != EGL14.EGL_NO_CONTEXT) {
+                    if (eglContext !=
+                            EGL14.EGL_NO_CONTEXT) {
 
                         EGL14.eglDestroyContext(
                                 eglDisplay,
@@ -798,10 +1010,43 @@ public class LiveWallpaperService extends WallpaperService {
 
             } finally {
 
-                eglDisplay = null;
-                eglContext = null;
-                eglSurface = null;
+                eglDisplay =
+                        EGL14.EGL_NO_DISPLAY;
+
+                eglContext =
+                        EGL14.EGL_NO_CONTEXT;
+
+                eglSurface =
+                        EGL14.EGL_NO_SURFACE;
+
+                program = 0;
+                textureId = 0;
             }
+        }
+
+        // ============================================================
+        // FINAL CLEANUP
+        // ============================================================
+
+        @Override
+        public void onDestroy() {
+
+            visible = false;
+
+            handler.removeCallbacks(
+                    drawRunnable
+            );
+
+            releaseEGL();
+
+            if (bitmap != null &&
+                    !bitmap.isRecycled()) {
+
+                bitmap.recycle();
+                bitmap = null;
+            }
+
+            super.onDestroy();
         }
     }
 }
