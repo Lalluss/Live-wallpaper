@@ -194,13 +194,11 @@ public class MainActivity extends Activity {
                             JSONObject item =
                                     array.getJSONObject(i);
 
-
                             String title =
                                     item.optString(
                                             "title",
                                             "Wallpaper"
                                     );
-
 
                             String imageUrl =
                                     item.optString(
@@ -304,7 +302,10 @@ public class MainActivity extends Activity {
         );
 
 
+        // ==============================
         // HOME BUTTON
+        // ==============================
+
         Button home =
                 new Button(this);
 
@@ -313,7 +314,10 @@ public class MainActivity extends Activity {
         );
 
 
+        // ==============================
         // LOCK BUTTON
+        // ==============================
+
         Button lock =
                 new Button(this);
 
@@ -322,7 +326,10 @@ public class MainActivity extends Activity {
         );
 
 
+        // ==============================
         // BOTH BUTTON
+        // ==============================
+
         Button both =
                 new Button(this);
 
@@ -331,15 +338,16 @@ public class MainActivity extends Activity {
         );
 
 
+        // ==============================
         // LIVE BUTTON
+        // ==============================
+
         Button live =
                 new Button(this);
 
         live.setText(
                 "✨ SET LIVE WALLPAPER"
         );
-        
-        card.addView(wall3D);
 
 
         card.addView(home);
@@ -354,7 +362,10 @@ public class MainActivity extends Activity {
         wallpaperContainer.addView(card);
 
 
-        // Download image
+        // ==============================
+        // LOAD IMAGE
+        // ==============================
+
         new Thread(() -> {
 
             try {
@@ -404,7 +415,10 @@ public class MainActivity extends Activity {
                     );
 
 
+                    // ==========================
                     // HOME
+                    // ==========================
+
                     home.setOnClickListener(v ->
                             setWallpaper(
                                     position,
@@ -413,7 +427,10 @@ public class MainActivity extends Activity {
                     );
 
 
+                    // ==========================
                     // LOCK
+                    // ==========================
+
                     lock.setOnClickListener(v ->
                             setWallpaper(
                                     position,
@@ -422,7 +439,10 @@ public class MainActivity extends Activity {
                     );
 
 
+                    // ==========================
                     // BOTH
+                    // ==========================
+
                     both.setOnClickListener(v ->
                             setWallpaper(
                                     position,
@@ -432,7 +452,10 @@ public class MainActivity extends Activity {
                     );
 
 
+                    // ==========================
                     // LIVE
+                    // ==========================
+
                     live.setOnClickListener(v ->
                             openLiveWallpaper(
                                     imageUrl
@@ -458,11 +481,9 @@ public class MainActivity extends Activity {
     }
 
 
-    /*
-     * ==========================================
-     * SET NORMAL WALLPAPER
-     * ==========================================
-     */
+    // ==========================================
+    // SET NORMAL WALLPAPER
+    // ==========================================
 
     private void setWallpaper(
             int position,
@@ -525,22 +546,15 @@ public class MainActivity extends Activity {
     }
 
 
-    /*
-     * ==========================================
-     * OPEN LIVE WALLPAPER
-     * ==========================================
-     */
+    // ==========================================
+    // OPEN LIVE WALLPAPER
+    // ==========================================
 
     private void openLiveWallpaper(
             String imageUrl
     ) {
 
         try {
-
-            /*
-             * Save selected wallpaper URL
-             * so LiveWallpaperService can read it.
-             */
 
             SharedPreferences preferences =
                     getSharedPreferences(
@@ -557,17 +571,15 @@ public class MainActivity extends Activity {
                     .apply();
 
 
-            /*
-             * Open Android Live Wallpaper
-             * confirmation/setup screen.
-             */
-
-            if (Build.VERSION.SDK_INT >=
-                    Build.VERSION_CODES.N) {
+            if (
+                    Build.VERSION.SDK_INT >=
+                            Build.VERSION_CODES.N
+            ) {
 
                 Intent intent =
                         new Intent(
-                                WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER
+                                WallpaperManager
+                                        .ACTION_CHANGE_LIVE_WALLPAPER
                         );
 
 
@@ -579,7 +591,8 @@ public class MainActivity extends Activity {
 
 
                 intent.putExtra(
-                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        WallpaperManager
+                                .EXTRA_LIVE_WALLPAPER_COMPONENT,
                         componentName
                 );
 
@@ -590,7 +603,8 @@ public class MainActivity extends Activity {
 
                 Intent intent =
                         new Intent(
-                                WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER
+                                WallpaperManager
+                                        .ACTION_LIVE_WALLPAPER_CHOOSER
                         );
 
                 startActivity(intent);
@@ -611,40 +625,10 @@ public class MainActivity extends Activity {
     }
 
 
-    /*
-     * ==========================================
-     * MESSAGE
-     * ==========================================
-     */
-    private void open3DWallpaper(String imageUrl) {
+    // ==========================================
+    // MESSAGE
+    // ==========================================
 
-    try {
-
-        Intent intent =
-                new Intent(
-                        this,
-                        ThreeDWallpaperActivity.class
-                );
-
-        intent.putExtra(
-                "image_url",
-                imageUrl
-        );
-
-        startActivity(intent);
-
-    } catch (Exception e) {
-
-        e.printStackTrace();
-
-        Toast.makeText(
-                this,
-                "❌ 3D Wallpaper failed",
-                Toast.LENGTH_LONG
-        ).show();
-    }
-    }
-    
     private void showMessage(
             String message
     ) {
