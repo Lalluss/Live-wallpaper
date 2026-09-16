@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob";
+import { handleUpload } from "@vercel/blob/client";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,30 +8,46 @@ export default async function handler(req, res) {
   }
 
   try {
-    const filename =
-      req.headers["x-filename"] ||
-      `wallpaper-${Date.now()}.jpg`;
+    const body = await handleUpload({
+      body: req.body,
+      request: req,
+      onBeforeGenerateToken: async (pathname) => {
 
-    const blob = await put(
-      filename,
-      req,
-      {
-        access: "public",
-        addRandomSuffix: true
+        const isVideo =
+          pathname.startsWith("wallpapers-live/") ||
+          /\.(mp4|webm|mov|m4v)$/i.test(pathname);
+
+        return {
+          allowedContentTypes: isVideo
+            ? [
+                "video/mp4",
+                "video/webm",
+                "video/quicktime",
+                "video/x-m4v"
+              ]
+            : [
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/gif"
+              ],
+
+          addRandomSuffix: true
+        };
+      },
+
+      onUploadCompleted: async ({ blob }) => {
+        console.log("Upload completed:", blob.url);
       }
-    );
-
-    return res.status(200).json({
-      url: blob.url
     });
+
+    return res.status(200).json(body);
 
   } catch (error) {
-
-    console.error(error);
+    console.error("Upload error:", error);
 
     return res.status(500).json({
-      error: "Upload failed"
+      error: error.message || "Upload failed"
     });
-
   }
 }
