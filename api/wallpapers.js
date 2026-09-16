@@ -1,13 +1,11 @@
 import { put, list, del } from "@vercel/blob";
 import crypto from "crypto";
 
-
 // ==========================================
 // ADMIN SESSION VERIFICATION
 // ==========================================
 
 function verifyAdminSession(req) {
-
   const cookies = req.headers.cookie || "";
 
   const match = cookies.match(
@@ -19,7 +17,6 @@ function verifyAdminSession(req) {
   }
 
   const token = match[1];
-
   const parts = token.split(".");
 
   if (parts.length !== 2) {
@@ -59,14 +56,11 @@ function verifyAdminSession(req) {
   }
 
   try {
-
     return crypto.timingSafeEqual(
       Buffer.from(signature),
       Buffer.from(expectedSignature)
     );
-
   } catch (error) {
-
     console.error(
       "Session verification error:",
       error
@@ -82,9 +76,7 @@ function verifyAdminSession(req) {
 // ==========================================
 
 function requireAdmin(req, res) {
-
   if (!verifyAdminSession(req)) {
-
     res.status(401).json({
       error: "Admin login required"
     });
@@ -101,32 +93,55 @@ function requireAdmin(req, res) {
 // ==========================================
 
 function getBlobPath(blobUrl) {
-
   try {
-
     const url = new URL(blobUrl);
 
     return decodeURIComponent(
       url.pathname.replace(/^\/+/, "")
     );
-
   } catch (error) {
-
     return null;
   }
 }
 
 
 // ==========================================
-// MAIN API
+// DETERMINE MEDIA TYPE
+// ==========================================
+
+function normalizeType(type, mediaType, image) {
+  const rawType = String(
+    type || mediaType || ""
+  ).toLowerCase();
+
+  if (
+    rawType === "live" ||
+    rawType === "livewall" ||
+    rawType === "live_wall" ||
+    rawType === "video"
+  ) {
+    return "live";
+  }
+
+  const rawUrl = String(
+    image || ""
+  ).toLowerCase();
+
+  if (
+    /\.(mp4|webm|mov|m4v)(\?|$)/i.test(rawUrl)
+  ) {
+    return "live";
+  }
+
+  return "wall";
+}
+
+
+// ==========================================
+// GET → LOAD ALL WALLPAPERS
 // ==========================================
 
 export default async function handler(req, res) {
-
-
-  // ==========================================
-  // GET → LOAD ALL WALLPAPERS
-  // ==========================================
 
   if (req.method === "GET") {
 
@@ -148,9 +163,28 @@ export default async function handler(req, res) {
           const data =
             await response.json();
 
+          // --------------------------------------
+          // BACKWARD COMPATIBILITY
+          // Old wallpapers without type
+          // automatically become normal WALL
+          // --------------------------------------
+
+          const type = normalizeType(
+            data.type,
+            data.mediaType,
+            data.image
+          );
+
           wallpapers.push({
 
             ...data,
+
+            type,
+
+            mediaType:
+              type === "live"
+                ? "video"
+                : "image",
 
             metadataUrl:
               blob.url
@@ -170,7 +204,8 @@ export default async function handler(req, res) {
 
       wallpapers.sort(
         (a, b) =>
-          b.createdAt - a.createdAt
+          (b.createdAt || 0) -
+          (a.createdAt || 0)
       );
 
 
@@ -190,13 +225,14 @@ export default async function handler(req, res) {
         error:
           "Failed to load wallpapers"
       });
+
     }
   }
 
 
 
   // ==========================================
-  // POST → UPLOAD WALLPAPER
+  // POST → UPLOAD WALL / LIVE WALL
   // ==========================================
 
   if (req.method === "POST") {
@@ -219,12 +255,32 @@ export default async function handler(req, res) {
 
         return res.status(400).json({
           error:
-            "Title and image are required"
+            "Title and media are required"
         });
+
       }
 
 
-      // Convert base64 image
+      // --------------------------------------
+      // DETERMINE TYPE
+      // --------------------------------------
+
+      const type = normalizeType(
+        body.type,
+        body.mediaType,
+        body.image
+      );
+
+      const mediaType =
+        type === "live"
+          ? "video"
+          : "image";
+
+
+      // --------------------------------------
+      // DATA URL VALIDATION
+      // --------------------------------------
+
       const imageParts =
         body.image.split(",");
 
@@ -233,18 +289,27 @@ export default async function handler(req, res) {
 
         return res.status(400).json({
           error:
-            "Invalid image data"
+            "Invalid media data"
         });
+
       }
 
 
-      const file = Buffer.from(
-        imageParts[1],
-        "base64"
-      );
+      // --------------------------------------
+      // BASE64 → BUFFER
+      // --------------------------------------
+
+      const file =
+        Buffer.from(
+          imageParts[1],
+          "base64"
+        );
 
 
-      // Safe filename
+      // --------------------------------------
+      // SAFE TITLE
+      // --------------------------------------
+
       const safeTitle =
         body.title
           .replace(/[^a-z0-9]/gi, "-")
@@ -255,19 +320,81 @@ export default async function handler(req, res) {
         Date.now();
 
 
-      // Upload image
-      const imageBlob =
+      // --------------------------------------
+      // FILE EXTENSION
+      // --------------------------------------
+
+      let extension = "jpg";
+
+      if (type === "live") {
+
+        if (
+          body.image.includes("video/webm")
+        ) {
+          extension = "webm";
+
+        } else if (
+          body.image.includes("video/quicktime")
+        ) {
+          extension = "mov";
+
+        } else if (
+          body.image.includes("video/x-m4v")
+        ) {
+          extension = "m4v";
+
+        } else {
+          extension = "mp4";
+        }
+
+      }
+
+
+      // --------------------------------------
+      // CONTENT TYPE
+      // --------------------------------------
+
+      let contentType =
+        "image/jpeg";
+
+      if (type === "live") {
+
+        if (extension === "webm") {
+          contentType = "video/webm";
+
+        } else if (extension === "mov") {
+          contentType = "video/quicktime";
+
+        } else if (extension === "m4v") {
+          contentType = "video/x-m4v";
+
+        } else {
+          contentType = "video/mp4";
+        }
+
+      }
+
+
+      // --------------------------------------
+      // UPLOAD MEDIA TO VERCEL BLOB
+      // --------------------------------------
+
+      const mediaBlob =
         await put(
-          `wallpapers/${timestamp}-${safeTitle}.jpg`,
+          `wallpapers/${timestamp}-${safeTitle}.${extension}`,
           file,
           {
             access: "public",
-            addRandomSuffix: true
+            addRandomSuffix: true,
+            contentType
           }
         );
 
 
-      // Wallpaper metadata
+      // --------------------------------------
+      // WALLPAPER METADATA
+      // --------------------------------------
+
       const wallpaperData = {
 
         id:
@@ -277,7 +404,11 @@ export default async function handler(req, res) {
           body.title,
 
         image:
-          imageBlob.url,
+          mediaBlob.url,
+
+        type,
+
+        mediaType,
 
         createdAt:
           timestamp
@@ -285,7 +416,10 @@ export default async function handler(req, res) {
       };
 
 
-      // Save metadata
+      // --------------------------------------
+      // SAVE METADATA
+      // --------------------------------------
+
       const metadataBlob =
         await put(
           `wallpapers-data/${timestamp}-${safeTitle}.json`,
@@ -295,6 +429,7 @@ export default async function handler(req, res) {
           {
             access: "public",
             addRandomSuffix: true,
+            allowOverwrite: false,
             contentType:
               "application/json"
           }
@@ -328,9 +463,11 @@ export default async function handler(req, res) {
       return res.status(500).json({
 
         error:
+          error?.message ||
           "Wallpaper upload failed"
 
       });
+
     }
   }
 
@@ -364,10 +501,14 @@ export default async function handler(req, res) {
             "Metadata URL and title are required"
 
         });
+
       }
 
 
-      // Read existing metadata
+      // --------------------------------------
+      // READ EXISTING METADATA
+      // --------------------------------------
+
       const response =
         await fetch(
           body.metadataUrl
@@ -382,6 +523,7 @@ export default async function handler(req, res) {
             "Wallpaper metadata not found"
 
         });
+
       }
 
 
@@ -389,13 +531,31 @@ export default async function handler(req, res) {
         await response.json();
 
 
-      // ------------------------------------------
-      // OPTIONAL: REPLACE IMAGE
-      // ------------------------------------------
+      // --------------------------------------
+      // KEEP EXISTING MEDIA
+      // --------------------------------------
 
       let newImageUrl =
         oldData.image;
 
+
+      let newType =
+        normalizeType(
+          oldData.type,
+          oldData.mediaType,
+          oldData.image
+        );
+
+
+      let newMediaType =
+        newType === "live"
+          ? "video"
+          : "image";
+
+
+      // --------------------------------------
+      // OPTIONAL MEDIA REPLACEMENT
+      // --------------------------------------
 
       if (body.image) {
 
@@ -408,9 +568,10 @@ export default async function handler(req, res) {
           return res.status(400).json({
 
             error:
-              "Invalid image data"
+              "Invalid media data"
 
           });
+
         }
 
 
@@ -419,6 +580,21 @@ export default async function handler(req, res) {
             imageParts[1],
             "base64"
           );
+
+
+        // Determine replacement type
+        newType =
+          normalizeType(
+            body.type,
+            body.mediaType,
+            body.image
+          );
+
+
+        newMediaType =
+          newType === "live"
+            ? "video"
+            : "image";
 
 
         const safeTitle =
@@ -430,22 +606,71 @@ export default async function handler(req, res) {
             .toLowerCase();
 
 
-        const imageBlob =
+        let extension = "jpg";
+
+        let contentType =
+          "image/jpeg";
+
+
+        if (newType === "live") {
+
+          if (
+            body.image.includes(
+              "video/webm"
+            )
+          ) {
+
+            extension = "webm";
+            contentType = "video/webm";
+
+          } else if (
+            body.image.includes(
+              "video/quicktime"
+            )
+          ) {
+
+            extension = "mov";
+            contentType =
+              "video/quicktime";
+
+          } else if (
+            body.image.includes(
+              "video/x-m4v"
+            )
+          ) {
+
+            extension = "m4v";
+            contentType =
+              "video/x-m4v";
+
+          } else {
+
+            extension = "mp4";
+            contentType = "video/mp4";
+
+          }
+
+        }
+
+
+        // Upload replacement
+        const mediaBlob =
           await put(
-            `wallpapers/${Date.now()}-${safeTitle}.jpg`,
+            `wallpapers/${Date.now()}-${safeTitle}.${extension}`,
             file,
             {
               access: "public",
-              addRandomSuffix: true
+              addRandomSuffix: true,
+              contentType
             }
           );
 
 
         newImageUrl =
-          imageBlob.url;
+          mediaBlob.url;
 
 
-        // Delete old image
+        // Delete old media
         if (oldData.image) {
 
           try {
@@ -457,18 +682,20 @@ export default async function handler(req, res) {
           } catch (deleteError) {
 
             console.error(
-              "Old image delete error:",
+              "Old media delete error:",
               deleteError
             );
 
           }
+
         }
+
       }
 
 
-      // ------------------------------------------
+      // --------------------------------------
       // UPDATED DATA
-      // ------------------------------------------
+      // --------------------------------------
 
       const updatedData = {
 
@@ -480,13 +707,22 @@ export default async function handler(req, res) {
         image:
           newImageUrl,
 
+        type:
+          newType,
+
+        mediaType:
+          newMediaType,
+
         updatedAt:
           Date.now()
 
       };
 
 
-      // Get exact existing metadata pathname
+      // --------------------------------------
+      // GET EXISTING METADATA PATH
+      // --------------------------------------
+
       const metadataPath =
         getBlobPath(
           body.metadataUrl
@@ -501,10 +737,14 @@ export default async function handler(req, res) {
             "Invalid metadata URL"
 
         });
+
       }
 
 
-      // Overwrite existing metadata
+      // --------------------------------------
+      // OVERWRITE METADATA
+      // --------------------------------------
+
       await put(
         metadataPath,
         JSON.stringify(
@@ -547,16 +787,18 @@ export default async function handler(req, res) {
       return res.status(500).json({
 
         error:
+          error?.message ||
           "Wallpaper update failed"
 
       });
+
     }
   }
 
 
 
   // ==========================================
-  // DELETE → DELETE WALLPAPER
+  // DELETE → DELETE WALL / LIVE WALL
   // ==========================================
 
   if (req.method === "DELETE") {
@@ -582,10 +824,14 @@ export default async function handler(req, res) {
             "Metadata URL is required"
 
         });
+
       }
 
 
-      // Read metadata first
+      // --------------------------------------
+      // READ METADATA
+      // --------------------------------------
+
       const response =
         await fetch(
           body.metadataUrl
@@ -600,6 +846,7 @@ export default async function handler(req, res) {
             "Wallpaper not found"
 
         });
+
       }
 
 
@@ -607,7 +854,10 @@ export default async function handler(req, res) {
         await response.json();
 
 
-      // Delete metadata
+      // --------------------------------------
+      // DELETE METADATA
+      // --------------------------------------
+
       try {
 
         await del(
@@ -622,10 +872,15 @@ export default async function handler(req, res) {
         );
 
         throw metadataError;
+
       }
 
 
-      // Delete actual image
+      // --------------------------------------
+      // DELETE MEDIA
+      // Works for both image and video
+      // --------------------------------------
+
       if (data.image) {
 
         try {
@@ -634,14 +889,15 @@ export default async function handler(req, res) {
             data.image
           );
 
-        } catch (imageError) {
+        } catch (mediaError) {
 
           console.error(
-            "Image delete error:",
-            imageError
+            "Media delete error:",
+            mediaError
           );
 
         }
+
       }
 
 
@@ -666,10 +922,13 @@ export default async function handler(req, res) {
       return res.status(500).json({
 
         error:
+          error?.message ||
           "Wallpaper delete failed"
 
       });
+
     }
+
   }
 
 
