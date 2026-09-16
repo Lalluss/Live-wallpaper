@@ -1,4 +1,58 @@
 import { handleUpload } from "@vercel/blob/client";
+import crypto from "crypto";
+
+function getSecret() {
+  return (
+    process.env.SESSION_SECRET ||
+    process.env.ADMIN_SECRET ||
+    process.env.ADMIN_PASSWORD ||
+    "change-this-secret"
+  );
+}
+
+function getCookie(req, name) {
+  const cookie = req.headers.cookie || "";
+
+  const match = cookie.match(
+    new RegExp(
+      "(?:^|;\\s*)" +
+        name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+        "=([^;]*)"
+    )
+  );
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function verifyAdmin(req) {
+  const token = getCookie(req, "admin_session");
+
+  if (!token) return false;
+
+  try {
+    const [timestamp, signature] = token.split(".");
+
+    if (!timestamp || !signature) return false;
+
+    const maxAge = 24 * 60 * 60 * 1000;
+
+    if (Date.now() - Number(timestamp) > maxAge) {
+      return false;
+    }
+
+    const expected = crypto
+      .createHmac("sha256", getSecret())
+      .update(timestamp)
+      .digest("hex");
+
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected)
+    );
+  } catch {
+    return false;
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,11 +62,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = await handleUpload({
-      body: req.body,
-      request: req,
-      onBeforeGenerateToken: async (pathname) => {
+    // Admin authentication
+    if (!verifyAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized"
+      });
+    }
 
+    const jsonResponse = await handleUpload({
+      request: req,
+
+      body: req.body,
+
+      onBeforeGenerateToken: async (pathname) => {
         const isVideo =
           pathname.startsWith("wallpapers-live/") ||
           /\.(mp4|webm|mov|m4v)$/i.test(pathname);
@@ -37,17 +99,25 @@ export default async function handler(req, res) {
       },
 
       onUploadCompleted: async ({ blob }) => {
-        console.log("Upload completed:", blob.url);
+        console.log(
+          "Vercel Blob upload completed:",
+          blob.url
+        );
       }
     });
 
-    return res.status(200).json(body);
+    return res.status(200).json(jsonResponse);
 
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error(
+      "Vercel Blob client upload error:",
+      error
+    );
 
     return res.status(500).json({
-      error: error.message || "Upload failed"
+      error:
+        error?.message ||
+        "Failed to retrieve the client token"
     });
   }
-}
+          }
