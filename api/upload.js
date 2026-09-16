@@ -8,17 +8,12 @@ function verifyAdminSession(req) {
     /(?:^|;\s*)admin_session=([^;]+)/
   );
 
-  if (!match) {
-    return false;
-  }
+  if (!match) return false;
 
   const token = match[1];
-
   const parts = token.split(".");
 
-  if (parts.length !== 2) {
-    return false;
-  }
+  if (parts.length !== 2) return false;
 
   const timestamp = parts[0];
   const signature = parts[1];
@@ -62,19 +57,11 @@ function verifyAdminSession(req) {
 
 export default async function handler(req, res) {
 
-  // ==========================================
-  // ONLY POST
-  // ==========================================
-
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Method not allowed"
     });
   }
-
-  // ==========================================
-  // ADMIN CHECK
-  // ==========================================
 
   if (!verifyAdminSession(req)) {
     return res.status(401).json({
@@ -84,93 +71,64 @@ export default async function handler(req, res) {
 
   try {
 
-    // ========================================
     // IMPORTANT:
-    // Client upload sends JSON token request.
-    // Parse it first.
-    // ========================================
+    // Vercel Blob expects the client-upload
+    // request body as JSON.
+    const body = req.body;
 
-    const body = await new Promise(
-      (resolve, reject) => {
-
-        let data = "";
-
-        req.on("data", chunk => {
-          data += chunk;
-        });
-
-        req.on("end", () => {
-          try {
-            resolve(
-              data
-                ? JSON.parse(data)
-                : {}
-            );
-          } catch (error) {
-            reject(error);
-          }
-        });
-
-        req.on("error", reject);
-      }
-    );
-
-    // ========================================
-    // VERCEL BLOB CLIENT UPLOAD
-    // ========================================
-
-    const jsonResponse =
-      await handleUpload({
-
-        body,
-
-        request: req,
-
-        onBeforeGenerateToken:
-          async (pathname) => {
-
-            const isVideo =
-              pathname.startsWith(
-                "wallpapers-live/"
-              ) ||
-              /\.(mp4|webm|mov|m4v)$/i.test(
-                pathname
-              );
-
-            return {
-
-              allowedContentTypes:
-                isVideo
-                  ? [
-                      "video/mp4",
-                      "video/webm",
-                      "video/quicktime",
-                      "video/x-m4v"
-                    ]
-                  : [
-                      "image/jpeg",
-                      "image/png",
-                      "image/webp",
-                      "image/gif"
-                    ],
-
-              addRandomSuffix: true
-            };
-          },
-
-        onUploadCompleted:
-          async ({ blob }) => {
-
-            console.log(
-              "✅ Blob upload completed:",
-              blob.url
-            );
-          }
+    if (!body) {
+      return res.status(400).json({
+        error: "Missing request body"
       });
+    }
 
-    // ========================================
-    // RETURN TOKEN TO BROWSER
-    // ========================================
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+
+      onBeforeGenerateToken: async (
+        pathname
+      ) => {
+
+        const isVideo =
+          pathname.startsWith(
+            "wallpapers-live/"
+          ) ||
+          /\.(mp4|webm|mov|m4v)$/i.test(
+            pathname
+          );
+
+        return {
+          allowedContentTypes: isVideo
+            ? [
+                "video/mp4",
+                "video/webm",
+                "video/quicktime",
+                "video/x-m4v"
+              ]
+            : [
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/gif"
+              ],
+
+          maximumSizeInBytes:
+            100 * 1024 * 1024,
+
+          addRandomSuffix: true
+        };
+      },
+
+      onUploadCompleted: async ({
+        blob
+      }) => {
+        console.log(
+          "Blob upload completed:",
+          blob.url
+        );
+      }
+    });
 
     return res.status(200).json(
       jsonResponse
@@ -179,14 +137,14 @@ export default async function handler(req, res) {
   } catch (error) {
 
     console.error(
-      "❌ Blob client upload error:",
+      "BLOB TOKEN ERROR:",
       error
     );
 
     return res.status(400).json({
       error:
         error?.message ||
-        String(error)
+        "Failed to create Blob client token"
     });
   }
 }
