@@ -1,58 +1,49 @@
 name: Build AnimeWall APK
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - "android/**"
-      - ".github/workflows/build-apk.yml"
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Set up Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
-        run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Download AI segmentation model
-        run: |
-          mkdir -p android/app/src/main/assets
-
-          curl -L --fail --retry 3 \
-            "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite" \
-            -o android/app/src/main/assets/selfie_multiclass_256x256.tflite
-
-          echo "AI model downloaded successfully"
-
-          ls -lh android/app/src/main/assets/
-
-      - name: Install Gradle
-        uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          packages: ''
 
-      - name: Build APK
+      - name: Install Android SDK packages
         run: |
-          cd android
-          gradle assembleDebug --no-daemon
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AnimeWall-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
