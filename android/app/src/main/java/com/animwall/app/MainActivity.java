@@ -598,9 +598,9 @@ public class MainActivity extends Activity {
         VideoView video =
                 new VideoView(this);
 
-        video.setBackgroundColor(
-                Color.BLACK
-        );
+        video.setBackgroundColor(Color.BLACK);
+        video.setKeepScreenOn(false);
+        video.setFocusable(true);
 
         LinearLayout.LayoutParams videoParams =
                 new LinearLayout.LayoutParams(
@@ -617,72 +617,107 @@ public class MainActivity extends Activity {
                 );
 
         card.addView(live);
-
         wallpaperContainer.addView(card);
 
+        /*
+         * IMPORTANT:
+         * Set all listeners BEFORE setVideoURI().
+         * VideoView prepares the remote MP4 asynchronously.
+         * Registering the callbacks first makes sure the prepared
+         * and error callbacks are always received.
+         */
+
+        video.setOnPreparedListener(mp -> {
+
+            try {
+                mp.setLooping(true);
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    mp.setVolume(0f, 0f);
+                } else {
+                    mp.setVolume(0f, 0f);
+                }
+
+                video.requestFocus();
+                video.start();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        video.setOnCompletionListener(mp -> {
+
+            try {
+                mp.seekTo(0);
+                mp.start();
+            } catch (Exception ignored) {
+            }
+        });
+
+        video.setOnErrorListener((mp, what, extra) -> {
+
+            android.util.Log.e(
+                    "AnimeWall",
+                    "Live preview error: " + what + " / " + extra
+            );
+
+            TextView error =
+                    new TextView(MainActivity.this);
+
+            error.setText(
+                    "❌ Video preview failed\n\n" +
+                    "This MP4 may use an unsupported video codec."
+            );
+
+            error.setTextSize(15);
+            error.setTextColor(Color.LTGRAY);
+            error.setGravity(Gravity.CENTER);
+            error.setPadding(
+                    dp(20),
+                    dp(20),
+                    dp(20),
+                    dp(20)
+            );
+
+            video.setVisibility(View.GONE);
+
+            card.addView(
+                    error,
+                    1
+            );
+
+            return true;
+        });
+
+        /*
+         * Vercel Blob gives us a normal HTTPS public MP4 URL.
+         * VideoView can stream it directly; no download is required.
+         */
         try {
 
-            video.setVideoURI(
-                    android.net.Uri.parse(
-                            item.imageUrl
-                    )
-            );
+            android.net.Uri videoUri =
+                    android.net.Uri.parse(item.imageUrl);
 
-            video.setOnPreparedListener(
-                    mp -> {
-
-                        mp.setLooping(true);
-
-                        try {
-                            mp.setAudioStreamType(
-                                    AudioManager.STREAM_MUSIC
-                            );
-                            mp.setVolume(
-                                    0f,
-                                    0f
-                            );
-                        } catch (Exception ignored) {
-                        }
-
-                        video.start();
-                    }
-            );
-
-            video.setOnErrorListener(
-                    (mp, what, extra) -> {
-
-                        TextView error =
-                                new TextView(
-                                        MainActivity.this
-                                );
-
-                        error.setText(
-                                "❌ Video preview failed"
-                        );
-
-                        error.setTextColor(
-                                Color.LTGRAY
-                        );
-
-                        error.setGravity(
-                                Gravity.CENTER
-                        );
-
-                        video.setVisibility(
-                                View.GONE
-                        );
-
-                        card.addView(
-                                error,
-                                1
-                        );
-
-                        return true;
-                    }
-            );
+            video.setVideoURI(videoUri);
 
         } catch (Exception e) {
+
             e.printStackTrace();
+
+            TextView error =
+                    new TextView(MainActivity.this);
+
+            error.setText("❌ Invalid video URL");
+            error.setTextColor(Color.LTGRAY);
+            error.setGravity(Gravity.CENTER);
+
+            video.setVisibility(View.GONE);
+
+            card.addView(
+                    error,
+                    1
+            );
         }
 
         live.setOnClickListener(
