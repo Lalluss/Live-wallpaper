@@ -1,248 +1,335 @@
-import { put, list, del } from "@vercel/blob";
+import { put, list } from "@vercel/blob";
 import crypto from "crypto";
 
-const DATA_PREFIX = "wallpapers-data/";
-const MEDIA_PREFIX = "wallpapers/";
 
-function getSecret() {
-  return (
-    process.env.SESSION_SECRET ||
-    process.env.ADMIN_SECRET ||
-    process.env.ADMIN_PASSWORD ||
-    "change-this-secret"
+function verifyAdminSession(req) {
+
+  const cookies = req.headers.cookie || "";
+
+  const match = cookies.match(
+    /(?:^|;\s*)admin_session=([^;]+)/
   );
-}
 
-function getCookie(req, name) {
-  const cookie = req.headers.cookie || "";
+  if (!match) {
+    return false;
+  }
 
-  const match = cookie.match(
-    new RegExp(
-      "(?:^|;\\s*)" +
-        name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
-        "=([^;]*)"
+  const token = match[1];
+
+  const parts = token.split(".");
+
+  if (parts.length !== 2) {
+    return false;
+  }
+
+  const timestamp = parts[0];
+  const signature = parts[1];
+
+  const timestampNumber = Number(timestamp);
+
+  if (!Number.isFinite(timestampNumber)) {
+    return false;
+  }
+
+
+  // Session expires after 24 hours
+  if (
+    Date.now() - timestampNumber > 86400000 ||
+    timestampNumber > Date.now()
+  ) {
+    return false;
+  }
+
+
+  const expectedSignature = crypto
+    .createHmac(
+      "sha256",
+      process.env.ADMIN_PASSWORD
     )
-  );
+    .update(timestamp)
+    .digest("hex");
 
-  return match ? decodeURIComponent(match[1]) : null;
-}
 
-function verifyAdmin(req) {
-  const token = getCookie(req, "admin_session");
+  // Prevent timingSafeEqual length errors
+  if (
+    signature.length !== expectedSignature.length
+  ) {
+    return false;
+  }
 
-  if (!token) return false;
 
   try {
-    const [timestamp, signature] = token.split(".");
-
-    if (!timestamp || !signature) return false;
-
-    const maxAge = 24 * 60 * 60 * 1000;
-
-    if (Date.now() - Number(timestamp) > maxAge) {
-      return false;
-    }
-
-    const expected = crypto
-      .createHmac("sha256", getSecret())
-      .update(timestamp)
-      .digest("hex");
 
     return crypto.timingSafeEqual(
       Buffer.from(signature),
-      Buffer.from(expected)
+      Buffer.from(expectedSignature)
     );
-  } catch {
+
+  } catch (error) {
+
+    console.error(
+      "Session verification error:",
+      error
+    );
+
     return false;
   }
 }
 
-function isBlobUrl(value) {
-  return (
-    typeof value === "string" &&
-    /^https:\/\/[^/]+\.blob\.vercel-storage\.com\//i.test(value)
-  );
-}
 
-function isDataUrl(value) {
-  return (
-    typeof value === "string" &&
-    /^data:[^;]+;base64,/i.test(value)
-  );
-}
-
-function detectMediaType(value) {
-  if (!value || typeof value !== "string") {
-    return "image";
-  }
-
-  if (
-    value.startsWith("data:video/") ||
-    /\.(mp4|webm|mov|m4v)(\?|$)/i.test(value)
-  ) {
-    return "video";
-  }
-
-  return "image";
-}
-
-async function getAllWallpapers() {
-  const result = await list({
-    prefix: DATA_PREFIX
-  });
-
-  const wallpapers = [];
-
-  for (const blob of result.blobs) {
-    try {
-      const response = await fetch(blob.url);
-      const data = await response.json();
-
-      if (!data || !data.id) continue;
-
-      wallpapers.push({
-        ...data,
-
-        // Old files compatibility
-        type: data.type || "wall",
-        mediaType:
-          data.mediaType ||
-          detectMediaType(data.image)
-      });
-    } catch (error) {
-      console.error(
-        "Failed reading metadata:",
-        blob.pathname,
-        error
-      );
-    }
-  }
-
-  return wallpapers;
-}
-
-async function saveMetadata(data) {
-  const id = data.id;
-
-  const metadataPath = `${DATA_PREFIX}${id}.json`;
-
-  const blob = await put(
-    metadataPath,
-    JSON.stringify(data),
-    {
-      access: "public",
-      addRandomSuffix: false,
-      contentType: "application/json"
-    }
-  );
-
-  return blob;
-}
-
-async function findMetadata(id) {
-  const result = await list({
-    prefix: `${DATA_PREFIX}${id}.json`
-  });
-
-  if (!result.blobs.length) {
-    return null;
-  }
-
-  const blob = result.blobs[0];
-
-  try {
-    const response = await fetch(blob.url);
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-async function deleteMetadata(id) {
-  const result = await list({
-    prefix: `${DATA_PREFIX}${id}.json`
-  });
-
-  if (result.blobs.length) {
-    await del(result.blobs[0].url);
-  }
-}
-
-async function deleteMedia(mediaUrl) {
-  if (!mediaUrl || !isBlobUrl(mediaUrl)) {
-    return;
-  }
-
-  try {
-    await del(mediaUrl);
-  } catch (error) {
-    console.error("Media delete failed:", error);
-  }
-}
-
-function makeId() {
-  return (
-    Date.now().toString(36) +
-    "-" +
-    crypto.randomBytes(6).toString("hex")
-  );
-}
 
 export default async function handler(req, res) {
-  try {
-    /*
-     * =========================
-     * GET
-     * =========================
-     */
 
-    if (req.method === "GET") {
-      const wallpapers = await getAllWallpapers();
 
-      // Newest first
-      wallpapers.sort((a, b) => {
-        return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+  // ==========================================
+  // GET → Load online wallpapers
+  // ==========================================
+
+  if (req.method === "GET") {
+
+    try {
+
+      const result = await list({
+        prefix: "wallpapers-data/"
       });
+
+
+      const wallpapers = [];
+
+
+      for (const blob of result.blobs) {
+
+        try {
+
+          const response = await fetch(
+            blob.url
+          );
+
+          const data =
+            await response.json();
+
+
+          wallpapers.push(data);
+
+        } catch (error) {
+
+          console.error(
+            "Metadata read error:",
+            error
+          );
+
+        }
+
+      }
+
+
+      wallpapers.sort(
+        (a, b) =>
+          b.createdAt - a.createdAt
+      );
+
 
       return res.status(200).json({
         wallpapers
       });
-    }
 
-    /*
-     * =========================
-     * ADMIN CHECK
-     * =========================
-     */
 
-    if (!verifyAdmin(req)) {
-      return res.status(401).json({
-        error: "Unauthorized"
+    } catch (error) {
+
+      console.error(error);
+
+
+      return res.status(500).json({
+        error:
+          "Failed to load wallpapers"
       });
+
     }
 
-    /*
-     * =========================
-     * POST
-     * Create new wallpaper
-     * =========================
-     */
+  }
 
-    if (req.method === "POST") {
-      const {
-        title,
-        image,
-        type,
-        mediaType
-      } = req.body || {};
 
-      if (!title || !image) {
+
+  // ==========================================
+  // POST → Upload wallpaper
+  // ==========================================
+
+  if (req.method === "POST") {
+
+
+    // ------------------------------------------
+    // Check admin login
+    // ------------------------------------------
+
+    if (!verifyAdminSession(req)) {
+
+      return res.status(401).json({
+        error:
+          "Admin login required"
+      });
+
+    }
+
+
+
+    try {
+
+      const body = req.body;
+
+
+      if (
+        !body ||
+        !body.title ||
+        !body.image
+      ) {
+
         return res.status(400).json({
-          error: "Title and image are required"
+          error:
+            "Title and image are required"
         });
+
       }
 
-      const wallpaperType =
-        type === "live" ? "live" : "wall";
 
-     
+
+      // ------------------------------------------
+      // Convert base64 image to file
+      // ------------------------------------------
+
+      const imageParts =
+        body.image.split(",");
+
+
+      if (imageParts.length < 2) {
+
+        return res.status(400).json({
+          error:
+            "Invalid image data"
+        });
+
+      }
+
+
+      const file = Buffer.from(
+        imageParts[1],
+        "base64"
+      );
+
+
+
+      // ------------------------------------------
+      // Create safe filename
+      // ------------------------------------------
+
+      const safeTitle =
+        body.title
+          .replace(/[^a-z0-9]/gi, "-")
+          .toLowerCase();
+
+
+      const timestamp =
+        Date.now();
+
+
+
+      // ------------------------------------------
+      // Upload actual wallpaper
+      // ------------------------------------------
+
+      const imageBlob =
+        await put(
+          `wallpapers/${timestamp}-${safeTitle}.jpg`,
+          file,
+          {
+            access: "public",
+            addRandomSuffix: true
+          }
+        );
+
+
+
+      // ------------------------------------------
+      // Save wallpaper information
+      // ------------------------------------------
+
+      const wallpaperData = {
+
+        title:
+          body.title,
+
+        image:
+          imageBlob.url,
+
+        createdAt:
+          timestamp
+
+      };
+
+
+
+      // ------------------------------------------
+      // Save metadata
+      // ------------------------------------------
+
+      await put(
+        `wallpapers-data/${timestamp}-${safeTitle}.json`,
+        JSON.stringify(
+          wallpaperData
+        ),
+        {
+          access: "public",
+          addRandomSuffix: true,
+          contentType:
+            "application/json"
+        }
+      );
+
+
+
+      // ------------------------------------------
+      // Success
+      // ------------------------------------------
+
+      return res.status(200).json({
+
+        success: true,
+
+        wallpaper:
+          wallpaperData
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Wallpaper upload error:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        error:
+          "Wallpaper upload failed"
+
+      });
+
+    }
+
+  }
+
+
+
+  // ==========================================
+  // Other methods
+  // ==========================================
+
+  return res.status(405).json({
+
+    error:
+      "Method not allowed"
+
+  });
+
+      }
