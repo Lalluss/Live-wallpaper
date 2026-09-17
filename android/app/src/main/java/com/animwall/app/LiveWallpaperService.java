@@ -29,10 +29,26 @@ public class LiveWallpaperService extends WallpaperService {
         private boolean surfaceReady = false;
         private boolean destroyed = false;
 
+        private final SharedPreferences.OnSharedPreferenceChangeListener
+                preferenceListener = (sharedPreferences, key) -> {
+            if (LIVE_WALLPAPER_URL.equals(key)
+                    && surfaceReady
+                    && !destroyed) {
+                android.util.Log.d(TAG,
+                        "Live wallpaper URL changed - reloading video");
+                preparePlayer();
+            }
+        };
+
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
             currentHolder = holder;
+
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .registerOnSharedPreferenceChangeListener(
+                            preferenceListener
+                    );
         }
 
         @Override
@@ -211,6 +227,12 @@ public class LiveWallpaperService extends WallpaperService {
             visible = false;
             surfaceReady = false;
             releasePlayer();
+
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .unregisterOnSharedPreferenceChangeListener(
+                            preferenceListener
+                    );
+
             currentHolder = null;
             super.onDestroy();
         }
