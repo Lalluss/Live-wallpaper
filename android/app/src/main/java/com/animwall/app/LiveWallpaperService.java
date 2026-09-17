@@ -139,9 +139,9 @@ public class LiveWallpaperService extends WallpaperService {
                 player.setRepeatMode(Player.REPEAT_MODE_ONE);
                 player.setVolume(0f);
 
-                // Fill the phone screen without stretching the video.
-                // The original aspect ratio is preserved; only the
-                // excess edges are cropped when necessary.
+                // Keep the video's original aspect ratio.
+                // Fill the phone screen and crop only the excess edges.
+                // This prevents the video from being stretched/distorted.
                 player.setVideoScalingMode(
                         C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
                 );

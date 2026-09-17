@@ -327,7 +327,6 @@ public class MainActivity extends Activity {
                 androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
         );
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
-        playerView.setKeepScreenOn(false);
 
         LinearLayout.LayoutParams videoParams =
                 new LinearLayout.LayoutParams(
@@ -535,7 +534,7 @@ public class MainActivity extends Activity {
 
             preferences.edit()
                     .putString(LIVE_WALLPAPER_URL, videoUrl)
-                    .apply();
+                    .commit();
 
             Intent intent = new Intent(
                     WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER
