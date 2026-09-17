@@ -17,4 +17,9 @@ android {
 
 dependencies {
     implementation 'com.google.mediapipe:tasks-vision:latest.release'
+
+    // Media3 / ExoPlayer for Live Wallpaper video preview
+    implementation 'androidx.media3:media3-exoplayer:1.11.1'
+    implementation 'androidx.media3:media3-ui:1.11.1'
+    implementation 'androidx.media3:media3-common:1.11.1'
 }
