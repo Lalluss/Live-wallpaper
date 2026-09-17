@@ -324,9 +324,10 @@ public class MainActivity extends Activity {
         playerView.setUseController(false);
         playerView.setKeepContentOnPlayerReset(true);
         playerView.setResizeMode(
-                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
         );
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING);
+        playerView.setKeepScreenOn(false);
 
         LinearLayout.LayoutParams videoParams =
                 new LinearLayout.LayoutParams(

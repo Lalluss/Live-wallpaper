@@ -4,6 +4,7 @@ import android.content.SharedPreferences;
 import android.service.wallpaper.WallpaperService;
 import android.view.SurfaceHolder;
 
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
@@ -137,6 +138,13 @@ public class LiveWallpaperService extends WallpaperService {
 
                 player.setRepeatMode(Player.REPEAT_MODE_ONE);
                 player.setVolume(0f);
+
+                // Fill the phone screen without stretching the video.
+                // The original aspect ratio is preserved; only the
+                // excess edges are cropped when necessary.
+                player.setVideoScalingMode(
+                        C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+                );
 
                 // Render directly to Android WallpaperService surface.
                 player.setVideoSurfaceHolder(currentHolder);
