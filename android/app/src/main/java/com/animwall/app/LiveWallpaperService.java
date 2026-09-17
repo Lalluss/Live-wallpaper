@@ -1,20 +1,19 @@
 package com.animwall.app;
 
 import android.content.SharedPreferences;
-import android.media.AudioAttributes;
-import android.media.MediaPlayer;
-import android.net.Uri;
 import android.service.wallpaper.WallpaperService;
 import android.view.SurfaceHolder;
 
-public class LiveWallpaperService
-        extends WallpaperService {
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
 
-    private static final String PREFS_NAME =
-            "AnimeWallPrefs";
+public class LiveWallpaperService extends WallpaperService {
 
-    private static final String LIVE_WALLPAPER_URL =
-            "live_wallpaper_url";
+    private static final String TAG = "AnimeWall";
+    private static final String PREFS_NAME = "AnimeWallPrefs";
+    private static final String LIVE_WALLPAPER_URL = "live_wallpaper_url";
 
     @Override
     public Engine onCreateEngine() {
@@ -23,271 +22,188 @@ public class LiveWallpaperService
 
     private class LiveEngine extends Engine {
 
-        private MediaPlayer mediaPlayer;
+        private ExoPlayer player;
+        private SurfaceHolder currentHolder;
         private boolean visible = false;
         private boolean surfaceReady = false;
-        private boolean prepared = false;
+        private boolean destroyed = false;
 
         @Override
-        public void onCreate(
-                SurfaceHolder holder
-        ) {
-
+        public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
-
-            holder.setFormat(
-                    android.graphics.PixelFormat.OPAQUE
-            );
+            currentHolder = holder;
         }
-
-        // ============================================================
-        // SURFACE CREATED
-        // ============================================================
 
         @Override
-        public void onSurfaceCreated(
-                SurfaceHolder holder
-        ) {
-
+        public void onSurfaceCreated(SurfaceHolder holder) {
             super.onSurfaceCreated(holder);
-
+            currentHolder = holder;
             surfaceReady = true;
-
-            preparePlayer(holder);
+            preparePlayer();
         }
-
-        // ============================================================
-        // SURFACE CHANGED
-        // ============================================================
 
         @Override
         public void onSurfaceChanged(
                 SurfaceHolder holder,
                 int format,
                 int width,
-                int height
-        ) {
+                int height) {
+            super.onSurfaceChanged(holder, format, width, height);
+            currentHolder = holder;
 
-            super.onSurfaceChanged(
-                    holder,
-                    format,
-                    width,
-                    height
-            );
-
-            if (mediaPlayer != null) {
-                mediaPlayer.setDisplay(holder);
+            if (player != null) {
+                try {
+                    player.setVideoSurfaceHolder(holder);
+                } catch (Exception e) {
+                    android.util.Log.e(TAG,
+                            "Failed to attach wallpaper surface", e);
+                }
             }
         }
 
-        // ============================================================
-        // SURFACE DESTROYED
-        // ============================================================
-
         @Override
-        public void onSurfaceDestroyed(
-                SurfaceHolder holder
-        ) {
-
+        public void onSurfaceDestroyed(SurfaceHolder holder) {
             surfaceReady = false;
 
-            stopAndReleasePlayer();
+            if (player != null) {
+                try {
+                    player.clearVideoSurface();
+                } catch (Exception ignored) {
+                }
+            }
+
+            releasePlayer();
+
+            if (currentHolder == holder) {
+                currentHolder = null;
+            }
 
             super.onSurfaceDestroyed(holder);
         }
 
-        // ============================================================
-        // VISIBILITY
-        // ============================================================
-
         @Override
-        public void onVisibilityChanged(
-                boolean isVisible
-        ) {
-
+        public void onVisibilityChanged(boolean isVisible) {
             visible = isVisible;
 
-            if (mediaPlayer == null || !prepared) {
+            if (player == null || !surfaceReady) {
                 return;
             }
 
             try {
-
                 if (visible) {
-
-                    mediaPlayer.start();
-
+                    player.play();
                 } else {
-
-                    if (mediaPlayer.isPlaying()) {
-                        mediaPlayer.pause();
-                    }
+                    player.pause();
                 }
-
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                android.util.Log.e(TAG,
+                        "Visibility playback error", e);
             }
         }
 
-        // ============================================================
-        // PREPARE VIDEO
-        // ============================================================
+        private void preparePlayer() {
+            releasePlayer();
 
-        private void preparePlayer(
-                SurfaceHolder holder
-        ) {
-
-            stopAndReleasePlayer();
-            prepared = false;
+            if (destroyed || !surfaceReady || currentHolder == null) {
+                return;
+            }
 
             SharedPreferences preferences =
-                    getSharedPreferences(
-                            PREFS_NAME,
-                            MODE_PRIVATE
-                    );
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-            String videoUrl =
-                    preferences.getString(
-                            LIVE_WALLPAPER_URL,
-                            ""
-                    );
+            String videoUrl = preferences.getString(
+                    LIVE_WALLPAPER_URL, "");
 
-            if (videoUrl == null ||
-                    videoUrl.trim().isEmpty()) {
-
+            if (videoUrl == null || videoUrl.trim().isEmpty()) {
+                android.util.Log.e(TAG,
+                        "No live wallpaper URL found");
                 return;
             }
 
+            videoUrl = videoUrl.trim();
+
+            if (!videoUrl.startsWith("http://") &&
+                    !videoUrl.startsWith("https://")) {
+                android.util.Log.e(TAG,
+                        "Invalid live wallpaper URL: " + videoUrl);
+                return;
+            }
+
+            final String finalVideoUrl = videoUrl;
+
             try {
+                player = new ExoPlayer.Builder(
+                        LiveWallpaperService.this).build();
 
-                mediaPlayer =
-                        new MediaPlayer();
+                player.setRepeatMode(Player.REPEAT_MODE_ONE);
+                player.setVolume(0f);
 
-                mediaPlayer.setAudioAttributes(
-                        new AudioAttributes.Builder()
-                                .setUsage(
-                                        AudioAttributes.USAGE_MEDIA
-                                )
-                                .setContentType(
-                                        AudioAttributes.CONTENT_TYPE_MOVIE
-                                )
-                                .build()
-                );
+                // Render directly to Android WallpaperService surface.
+                player.setVideoSurfaceHolder(currentHolder);
 
-                // Live wallpapers should be silent.
-                mediaPlayer.setVolume(
-                        0f,
-                        0f
-                );
+                player.addListener(new Player.Listener() {
+                    @Override
+                    public void onPlaybackStateChanged(int state) {
+                        if (state == Player.STATE_READY) {
+                            android.util.Log.d(TAG,
+                                    "Live wallpaper video READY");
 
-                mediaPlayer.setLooping(true);
-
-                mediaPlayer.setDisplay(holder);
-
-                mediaPlayer.setOnPreparedListener(
-                        mp -> {
-
-                            if (visible ||
-                                    surfaceReady) {
-
-                                try {
-                                    mp.start();
-                                } catch (Exception ignored) {
-                                }
+                            if (visible || surfaceReady) {
+                                player.play();
                             }
                         }
-                );
+                    }
 
-                mediaPlayer.setOnCompletionListener(
-                        mp -> {
+                    @Override
+                    public void onPlayerError(PlaybackException error) {
+                        android.util.Log.e(TAG,
+                                "Live wallpaper playback error: "
+                                        + error.getErrorCodeName(),
+                                error);
+                    }
+                });
 
-                            try {
-                                mp.seekTo(0);
-                                mp.start();
-                            } catch (Exception ignored) {
-                            }
-                        }
-                );
+                player.setMediaItem(MediaItem.fromUri(finalVideoUrl));
+                player.setPlayWhenReady(true);
+                player.prepare();
 
-                mediaPlayer.setOnErrorListener(
-                        (mp, what, extra) -> {
-
-                            android.util.Log.e(
-                                    "AnimeWall",
-                                    "Live video error: "
-                                            + what
-                                            + " / "
-                                            + extra
-                            );
-
-                            stopAndReleasePlayer();
-
-                            return true;
-                        }
-                );
-
-                mediaPlayer.setDataSource(
-                        LiveWallpaperService.this,
-                        Uri.parse(videoUrl)
-                );
-
-                mediaPlayer.prepareAsync();
+                android.util.Log.d(TAG,
+                        "Preparing live wallpaper: " + finalVideoUrl);
 
             } catch (Exception e) {
-
-                e.printStackTrace();
-
-                stopAndReleasePlayer();
+                android.util.Log.e(TAG,
+                        "Failed to create live wallpaper player", e);
+                releasePlayer();
             }
         }
 
-        // ============================================================
-        // RELEASE
-        // ============================================================
-
-        private void stopAndReleasePlayer() {
-
-            prepared = false;
-
-            if (mediaPlayer == null) {
+        private void releasePlayer() {
+            if (player == null) {
                 return;
             }
 
             try {
-
-                mediaPlayer.stop();
-
+                player.setPlayWhenReady(false);
+                player.clearVideoSurface();
+                player.stop();
             } catch (Exception ignored) {
             }
 
             try {
-
-                mediaPlayer.reset();
-
+                player.release();
             } catch (Exception ignored) {
             }
 
-            try {
-
-                mediaPlayer.release();
-
-            } catch (Exception ignored) {
-            }
-
-            mediaPlayer = null;
+            player = null;
         }
-
-        // ============================================================
-        // DESTROY
-        // ============================================================
 
         @Override
         public void onDestroy() {
-
+            destroyed = true;
             visible = false;
             surfaceReady = false;
-
-            stopAndReleasePlayer();
-
+            releasePlayer();
+            currentHolder = null;
             super.onDestroy();
         }
     }
