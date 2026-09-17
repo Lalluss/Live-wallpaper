@@ -194,12 +194,20 @@ public class MainActivity extends Activity {
     private void loadAllWallpapers() {
         new Thread(() -> {
             HttpURLConnection connection = null;
+
             try {
                 URL apiUrl = new URL(API_URL);
                 connection = (HttpURLConnection) apiUrl.openConnection();
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(15000);
                 connection.setReadTimeout(20000);
+                connection.setUseCaches(false);
+
+                int responseCode = connection.getResponseCode();
+
+                if (responseCode < 200 || responseCode >= 300) {
+                    throw new Exception("API HTTP " + responseCode);
+                }
 
                 InputStream input = connection.getInputStream();
                 StringBuilder result = new StringBuilder();
@@ -209,44 +217,168 @@ public class MainActivity extends Activity {
                 while ((length = input.read(buffer)) != -1) {
                     result.append(new String(buffer, 0, length));
                 }
+
                 input.close();
 
-                JSONObject response = new JSONObject(result.toString());
-                JSONArray array = response.getJSONArray("wallpapers");
-                wallpaperItems.clear();
+                String jsonText = result.toString().trim();
 
-                for (int i = 0; i < array.length(); i++) {
-                    JSONObject item = array.getJSONObject(i);
+                android.util.Log.d(
+                        "AnimeWall",
+                        "Wallpaper API response length = " + jsonText.length()
+                );
 
-                    String id = item.optString("id", "");
-                    String title = item.optString("title", "Wallpaper");
-                    String imageUrl = item.optString("image", "");
-                    String type = item.optString("type", "wall");
-                    String mediaType = item.optString("mediaType", "");
+                /*
+                 * Accept both:
+                 *
+                 * 1. { "wallpapers": [ ... ] }
+                 * 2. [ ... ]
+                 *
+                 * Also accept the common URL names used by the web uploader.
+                 */
+                JSONArray array;
 
-                    if (!"live".equalsIgnoreCase(type)
-                            && !"video".equalsIgnoreCase(mediaType)) {
-                        type = "wall";
-                        if (mediaType.isEmpty()) mediaType = "image";
-                    }
+                if (jsonText.startsWith("[")) {
+                    array = new JSONArray(jsonText);
+                } else {
+                    JSONObject response = new JSONObject(jsonText);
 
-                    if (!imageUrl.isEmpty()) {
-                        wallpaperItems.add(new WallpaperItem(
-                                id, title, imageUrl, type, mediaType
-                        ));
+                    if (response.has("wallpapers")
+                            && !response.isNull("wallpapers")) {
+                        Object wallpapersValue = response.get("wallpapers");
+
+                        if (wallpapersValue instanceof JSONArray) {
+                            array = (JSONArray) wallpapersValue;
+                        } else {
+                            throw new Exception(
+                                    "API 'wallpapers' is not an array"
+                            );
+                        }
+                    } else if (response.has("data")
+                            && !response.isNull("data")
+                            && response.get("data") instanceof JSONArray) {
+                        array = response.getJSONArray("data");
+                    } else {
+                        throw new Exception(
+                                "API response has no wallpapers array"
+                        );
                     }
                 }
 
-                runOnUiThread(this::renderCurrentMode);
+                final ArrayList<WallpaperItem> loadedItems =
+                        new ArrayList<>();
+
+                for (int i = 0; i < array.length(); i++) {
+                    JSONObject item = array.optJSONObject(i);
+
+                    if (item == null) {
+                        continue;
+                    }
+
+                    String id = item.optString("id", "");
+
+                    String title = item.optString(
+                            "title",
+                            item.optString("name", "Wallpaper")
+                    );
+
+                    /*
+                     * The current backend normally uses "image".
+                     * Keep fallbacks so a URL is not lost if the backend
+                     * returns "url", "mediaUrl", "video" or "src".
+                     */
+                    String imageUrl = item.optString("image", "");
+
+                    if (imageUrl.isEmpty()) {
+                        imageUrl = item.optString("url", "");
+                    }
+
+                    if (imageUrl.isEmpty()) {
+                        imageUrl = item.optString("mediaUrl", "");
+                    }
+
+                    if (imageUrl.isEmpty()) {
+                        imageUrl = item.optString("video", "");
+                    }
+
+                    if (imageUrl.isEmpty()) {
+                        imageUrl = item.optString("src", "");
+                    }
+
+                    if (imageUrl.isEmpty()) {
+                        continue;
+                    }
+
+                    String type = item.optString("type", "");
+                    String mediaType = item.optString("mediaType", "");
+
+                    /*
+                     * Do not depend only on type/mediaType.
+                     * If the uploaded URL itself is a video, treat it as
+                     * LIVE WALL. This protects old records too.
+                     */
+                    String lowerUrl = imageUrl.toLowerCase();
+
+                    boolean urlLooksLikeVideo =
+                            lowerUrl.contains(".mp4")
+                                    || lowerUrl.contains(".webm")
+                                    || lowerUrl.contains(".m4v")
+                                    || lowerUrl.contains(".mov")
+                                    || lowerUrl.contains("video/");
+
+                    boolean live =
+                            "live".equalsIgnoreCase(type)
+                                    || "video".equalsIgnoreCase(mediaType)
+                                    || urlLooksLikeVideo;
+
+                    if (live) {
+                        type = "live";
+                        mediaType = "video";
+                    } else {
+                        type = "wall";
+                        if (mediaType.isEmpty()) {
+                            mediaType = "image";
+                        }
+                    }
+
+                    loadedItems.add(
+                            new WallpaperItem(
+                                    id,
+                                    title,
+                                    imageUrl,
+                                    type,
+                                    mediaType
+                            )
+                    );
+                }
+
+                runOnUiThread(() -> {
+                    wallpaperItems.clear();
+                    wallpaperItems.addAll(loadedItems);
+                    renderCurrentMode();
+                });
 
             } catch (Exception e) {
-                e.printStackTrace();
+                android.util.Log.e(
+                        "AnimeWall",
+                        "Failed to load wallpaper API",
+                        e
+                );
+
                 runOnUiThread(() -> {
+                    wallpaperItems.clear();
+                    releaseLivePlayers();
                     wallpaperContainer.removeAllViews();
-                    showMessage("❌ Failed to load wallpapers");
+
+                    showMessage(
+                            "❌ Failed to load wallpapers\n\n"
+                                    + "Check internet connection"
+                    );
                 });
+
             } finally {
-                if (connection != null) connection.disconnect();
+                if (connection != null) {
+                    connection.disconnect();
+                }
             }
         }).start();
     }
@@ -559,6 +691,15 @@ public class MainActivity extends Activity {
                     "❌ Live Wallpaper setup failed",
                     android.widget.Toast.LENGTH_LONG
             ).show();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (wallpaperContainer != null) {
+            loadAllWallpapers();
         }
     }
 
