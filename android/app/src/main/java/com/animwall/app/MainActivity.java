@@ -20,7 +20,11 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.VideoView;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.ui.PlayerView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -45,6 +49,9 @@ public class MainActivity extends Activity {
     private LinearLayout wallpaperContainer;
 
     private final ArrayList<WallpaperItem> wallpaperItems =
+            new ArrayList<>();
+
+    private final ArrayList<ExoPlayer> livePlayers =
             new ArrayList<>();
 
     private String currentMode = "wall";
@@ -458,6 +465,7 @@ public class MainActivity extends Activity {
             return;
         }
 
+        releaseLivePlayers();
         wallpaperContainer.removeAllViews();
 
         int count = 0;
@@ -587,20 +595,19 @@ public class MainActivity extends Activity {
             WallpaperItem item
     ) {
 
-        LinearLayout card =
-                createCard();
+        LinearLayout card = createCard();
 
-        TextView name =
-                createCardTitle(
-                        "🎬 " + item.title
-                );
+        TextView name = createCardTitle(
+                "🎬 " + item.title
+        );
 
-        VideoView video =
-                new VideoView(this);
-
-        video.setBackgroundColor(Color.BLACK);
-        video.setKeepScreenOn(false);
-        video.setFocusable(true);
+        PlayerView playerView = new PlayerView(this);
+        playerView.setBackgroundColor(Color.BLACK);
+        playerView.setUseController(false);
+        playerView.setKeepContentOnPlayerReset(true);
+        playerView.setResizeMode(
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        );
 
         LinearLayout.LayoutParams videoParams =
                 new LinearLayout.LayoutParams(
@@ -609,113 +616,120 @@ public class MainActivity extends Activity {
                 );
 
         card.addView(name);
-        card.addView(video, videoParams);
+        card.addView(playerView, videoParams);
 
-        Button live =
-                createActionButton(
-                        "✨ SET LIVE WALLPAPER"
-                );
+        Button live = createActionButton(
+                "✨ SET LIVE WALLPAPER"
+        );
 
         card.addView(live);
         wallpaperContainer.addView(card);
 
-        /*
-         * IMPORTANT:
-         * Set all listeners BEFORE setVideoURI().
-         * VideoView prepares the remote MP4 asynchronously.
-         * Registering the callbacks first makes sure the prepared
-         * and error callbacks are always received.
-         */
-
-        video.setOnPreparedListener(mp -> {
-
-            try {
-                mp.setLooping(true);
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    mp.setVolume(0f, 0f);
-                } else {
-                    mp.setVolume(0f, 0f);
-                }
-
-                video.requestFocus();
-                video.start();
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-
-        video.setOnCompletionListener(mp -> {
-
-            try {
-                mp.seekTo(0);
-                mp.start();
-            } catch (Exception ignored) {
-            }
-        });
-
-        video.setOnErrorListener((mp, what, extra) -> {
-
-            android.util.Log.e(
-                    "AnimeWall",
-                    "Live preview error: " + what + " / " + extra
-            );
-
-            TextView error =
-                    new TextView(MainActivity.this);
-
-            error.setText(
-                    "❌ Video preview failed\n\n" +
-                    "This MP4 may use an unsupported video codec."
-            );
-
-            error.setTextSize(15);
-            error.setTextColor(Color.LTGRAY);
-            error.setGravity(Gravity.CENTER);
-            error.setPadding(
-                    dp(20),
-                    dp(20),
-                    dp(20),
-                    dp(20)
-            );
-
-            video.setVisibility(View.GONE);
-
-            card.addView(
-                    error,
-                    1
-            );
-
-            return true;
-        });
-
-        /*
-         * Vercel Blob gives us a normal HTTPS public MP4 URL.
-         * VideoView can stream it directly; no download is required.
-         */
         try {
+            ExoPlayer player =
+                    new ExoPlayer.Builder(this).build();
 
-            android.net.Uri videoUri =
-                    android.net.Uri.parse(item.imageUrl);
+            livePlayers.add(player);
+            playerView.setPlayer(player);
 
-            video.setVideoURI(videoUri);
+            player.setRepeatMode(
+                    Player.REPEAT_MODE_ONE
+            );
+
+            player.setVolume(0f);
+
+            player.addListener(
+                    new Player.Listener() {
+
+                        @Override
+                        public void onPlaybackStateChanged(
+                                int playbackState
+                        ) {
+                            if (playbackState ==
+                                    Player.STATE_READY) {
+
+                                playerView.setVisibility(
+                                        View.VISIBLE
+                                );
+
+                                player.play();
+                            }
+                        }
+
+                        @Override
+                        public void onPlayerError(
+                                PlaybackException error
+                        ) {
+                            android.util.Log.e(
+                                    "AnimeWall",
+                                    "Live video playback error: "
+                                            + error.getErrorCodeName()
+                                            + " / "
+                                            + error.getMessage(),
+                                    error
+                            );
+
+                            playerView.setVisibility(
+                                    View.GONE
+                            );
+
+                            TextView errorText =
+                                    new TextView(
+                                            MainActivity.this
+                                    );
+
+                            errorText.setText(
+                                    "❌ Video cannot be played"
+                            );
+
+                            errorText.setTextColor(
+                                    Color.LTGRAY
+                            );
+
+                            errorText.setGravity(
+                                    Gravity.CENTER
+                            );
+
+                            card.addView(
+                                    errorText,
+                                    1
+                            );
+                        }
+                    }
+            );
+
+            MediaItem mediaItem =
+                    MediaItem.fromUri(
+                            android.net.Uri.parse(
+                                    item.imageUrl
+                            )
+                    );
+
+            player.setMediaItem(mediaItem);
+            player.prepare();
+            player.play();
 
         } catch (Exception e) {
 
             e.printStackTrace();
 
-            TextView error =
-                    new TextView(MainActivity.this);
+            TextView errorText =
+                    new TextView(this);
 
-            error.setText("❌ Invalid video URL");
-            error.setTextColor(Color.LTGRAY);
-            error.setGravity(Gravity.CENTER);
+            errorText.setText(
+                    "❌ Video preview failed"
+            );
 
-            video.setVisibility(View.GONE);
+            errorText.setTextColor(
+                    Color.LTGRAY
+            );
+
+            errorText.setGravity(
+                    Gravity.CENTER
+            );
 
             card.addView(
-                    error,
+                    errorText,
                     1
             );
         }
@@ -725,6 +739,23 @@ public class MainActivity extends Activity {
                         item.imageUrl
                 )
         );
+    }
+
+    private void releaseLivePlayers() {
+
+        for (ExoPlayer player : livePlayers) {
+            try {
+                player.stop();
+            } catch (Exception ignored) {
+            }
+
+            try {
+                player.release();
+            } catch (Exception ignored) {
+            }
+        }
+
+        livePlayers.clear();
     }
 
     // ============================================================
@@ -960,6 +991,12 @@ public class MainActivity extends Activity {
                     android.widget.Toast.LENGTH_LONG
             ).show();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        releaseLivePlayers();
+        super.onDestroy();
     }
 
     // ============================================================
