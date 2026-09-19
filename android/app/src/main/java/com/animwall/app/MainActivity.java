@@ -199,9 +199,10 @@ public class MainActivity extends Activity {
                 URL apiUrl = new URL(API_URL);
                 connection = (HttpURLConnection) apiUrl.openConnection();
                 connection.setRequestMethod("GET");
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(20000);
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(30000);
                 connection.setUseCaches(false);
+                connection.setRequestProperty("Accept", "application/json");
 
                 int responseCode = connection.getResponseCode();
 
@@ -227,134 +228,120 @@ public class MainActivity extends Activity {
                         "Wallpaper API response length = " + jsonText.length()
                 );
 
-                /*
-                 * Accept both:
-                 *
-                 * 1. { "wallpapers": [ ... ] }
-                 * 2. [ ... ]
-                 *
-                 * Also accept the common URL names used by the web uploader.
-                 */
-                JSONArray array;
-
-                if (jsonText.startsWith("[")) {
-                    array = new JSONArray(jsonText);
-                } else {
-                    JSONObject response = new JSONObject(jsonText);
-
-                    if (response.has("wallpapers")
-                            && !response.isNull("wallpapers")) {
-                        Object wallpapersValue = response.get("wallpapers");
-
-                        if (wallpapersValue instanceof JSONArray) {
-                            array = (JSONArray) wallpapersValue;
-                        } else {
-                            throw new Exception(
-                                    "API 'wallpapers' is not an array"
-                            );
-                        }
-                    } else if (response.has("data")
-                            && !response.isNull("data")
-                            && response.get("data") instanceof JSONArray) {
-                        array = response.getJSONArray("data");
-                    } else {
-                        throw new Exception(
-                                "API response has no wallpapers array"
-                        );
-                    }
-                }
+                // Print the beginning of the response. This is extremely
+                // useful if the Vercel API shape changes again.
+                android.util.Log.d(
+                        "AnimeWall",
+                        "Wallpaper API response = "
+                                + (jsonText.length() > 4000
+                                ? jsonText.substring(0, 4000)
+                                : jsonText)
+                );
 
                 final ArrayList<WallpaperItem> loadedItems =
                         new ArrayList<>();
 
-                for (int i = 0; i < array.length(); i++) {
-                    JSONObject item = array.optJSONObject(i);
+                if (!jsonText.isEmpty()) {
+                    Object root;
 
-                    if (item == null) {
-                        continue;
-                    }
-
-                    String id = item.optString("id", "");
-
-                    String title = item.optString(
-                            "title",
-                            item.optString("name", "Wallpaper")
-                    );
-
-                    /*
-                     * The current backend normally uses "image".
-                     * Keep fallbacks so a URL is not lost if the backend
-                     * returns "url", "mediaUrl", "video" or "src".
-                     */
-                    String imageUrl = item.optString("image", "");
-
-                    if (imageUrl.isEmpty()) {
-                        imageUrl = item.optString("url", "");
-                    }
-
-                    if (imageUrl.isEmpty()) {
-                        imageUrl = item.optString("mediaUrl", "");
-                    }
-
-                    if (imageUrl.isEmpty()) {
-                        imageUrl = item.optString("video", "");
-                    }
-
-                    if (imageUrl.isEmpty()) {
-                        imageUrl = item.optString("src", "");
-                    }
-
-                    if (imageUrl.isEmpty()) {
-                        continue;
-                    }
-
-                    String type = item.optString("type", "");
-                    String mediaType = item.optString("mediaType", "");
-
-                    /*
-                     * Do not depend only on type/mediaType.
-                     * If the uploaded URL itself is a video, treat it as
-                     * LIVE WALL. This protects old records too.
-                     */
-                    String lowerUrl = imageUrl.toLowerCase();
-
-                    boolean urlLooksLikeVideo =
-                            lowerUrl.contains(".mp4")
-                                    || lowerUrl.contains(".webm")
-                                    || lowerUrl.contains(".m4v")
-                                    || lowerUrl.contains(".mov")
-                                    || lowerUrl.contains("video/");
-
-                    boolean live =
-                            "live".equalsIgnoreCase(type)
-                                    || "video".equalsIgnoreCase(mediaType)
-                                    || urlLooksLikeVideo;
-
-                    if (live) {
-                        type = "live";
-                        mediaType = "video";
+                    if (jsonText.startsWith("[")) {
+                        root = new JSONArray(jsonText);
                     } else {
-                        type = "wall";
-                        if (mediaType.isEmpty()) {
-                            mediaType = "image";
+                        root = new JSONObject(jsonText);
+                    }
+
+                    JSONArray array = findWallpaperArray(root);
+
+                    if (array != null) {
+                        for (int i = 0; i < array.length(); i++) {
+                            JSONObject item = array.optJSONObject(i);
+
+                            if (item == null) {
+                                continue;
+                            }
+
+                            String id = firstString(item,
+                                    "id", "_id", "uuid");
+
+                            String title = firstString(item,
+                                    "title", "name", "filename", "fileName");
+
+                            if (title.isEmpty()) {
+                                title = "Wallpaper";
+                            }
+
+                            String imageUrl = extractMediaUrl(item);
+
+                            if (imageUrl.isEmpty()) {
+                                android.util.Log.w(
+                                        "AnimeWall",
+                                        "Skipping item without media URL: "
+                                                + item.toString()
+                                );
+                                continue;
+                            }
+
+                            String type = firstString(
+                                    item, "type", "wallpaperType");
+
+                            String mediaType = firstString(
+                                    item, "mediaType", "mimeType", "contentType");
+
+                            String lowerUrl = imageUrl.toLowerCase();
+
+                            boolean urlLooksLikeVideo =
+                                    lowerUrl.contains(".mp4")
+                                            || lowerUrl.contains(".webm")
+                                            || lowerUrl.contains(".m4v")
+                                            || lowerUrl.contains(".mov")
+                                            || lowerUrl.contains("video/")
+                                            || "video/mp4".equalsIgnoreCase(mediaType);
+
+                            boolean live =
+                                    "live".equalsIgnoreCase(type)
+                                            || "video".equalsIgnoreCase(type)
+                                            || "video".equalsIgnoreCase(mediaType)
+                                            || urlLooksLikeVideo;
+
+                            if (live) {
+                                type = "live";
+                                mediaType = "video";
+                            } else {
+                                type = "wall";
+                                if (mediaType.isEmpty()) {
+                                    mediaType = "image";
+                                }
+                            }
+
+                            loadedItems.add(
+                                    new WallpaperItem(
+                                            id,
+                                            title,
+                                            imageUrl,
+                                            type,
+                                            mediaType
+                                    )
+                            );
                         }
                     }
-
-                    loadedItems.add(
-                            new WallpaperItem(
-                                    id,
-                                    title,
-                                    imageUrl,
-                                    type,
-                                    mediaType
-                            )
-                    );
                 }
+
+                android.util.Log.d(
+                        "AnimeWall",
+                        "Parsed wallpaper count = " + loadedItems.size()
+                );
 
                 runOnUiThread(() -> {
                     wallpaperItems.clear();
                     wallpaperItems.addAll(loadedItems);
                     renderCurrentMode();
+
+                    if (loadedItems.isEmpty()) {
+                        showMessage(
+                                "⚠️ API connected, but no wallpaper records were parsed.\n\n"
+                                        + "Check Android Studio Logcat → AnimeWall"
+                        );
+                    }
                 });
 
             } catch (Exception e) {
@@ -371,7 +358,11 @@ public class MainActivity extends Activity {
 
                     showMessage(
                             "❌ Failed to load wallpapers\n\n"
-                                    + "Check internet connection"
+                                    + e.getClass().getSimpleName()
+                                    + ": "
+                                    + (e.getMessage() == null
+                                    ? "unknown error"
+                                    : e.getMessage())
                     );
                 });
 
@@ -381,6 +372,172 @@ public class MainActivity extends Activity {
                 }
             }
         }).start();
+    }
+
+    /*
+     * Finds the wallpaper array even if the API wraps it in another object.
+     *
+     * Supported examples:
+     *   [ ... ]
+     *   { "wallpapers": [ ... ] }
+     *   { "data": [ ... ] }
+     *   { "data": { "wallpapers": [ ... ] } }
+     *   { "items": [ ... ] }
+     *   { "results": [ ... ] }
+     */
+    private JSONArray findWallpaperArray(Object value) {
+        if (value instanceof JSONArray) {
+            return (JSONArray) value;
+        }
+
+        if (!(value instanceof JSONObject)) {
+            return null;
+        }
+
+        JSONObject object = (JSONObject) value;
+
+        String[] preferredKeys = {
+                "wallpapers",
+                "data",
+                "items",
+                "results",
+                "records",
+                "files"
+        };
+
+        for (String key : preferredKeys) {
+            if (!object.has(key) || object.isNull(key)) {
+                continue;
+            }
+
+            Object child = object.opt(key);
+
+            if (child instanceof JSONArray) {
+                return (JSONArray) child;
+            }
+
+            JSONArray nested = findWallpaperArray(child);
+            if (nested != null) {
+                return nested;
+            }
+        }
+
+        // Last-resort recursive scan of object values.
+        java.util.Iterator<String> keys = object.keys();
+
+        while (keys.hasNext()) {
+            String key = keys.next();
+            Object child = object.opt(key);
+
+            if (child instanceof JSONArray) {
+                JSONArray candidate = (JSONArray) child;
+
+                if (candidate.length() == 0) {
+                    return candidate;
+                }
+
+                JSONObject first = candidate.optJSONObject(0);
+
+                if (first != null && looksLikeWallpaperRecord(first)) {
+                    return candidate;
+                }
+            }
+
+            JSONArray nested = findWallpaperArray(child);
+            if (nested != null) {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
+    private boolean looksLikeWallpaperRecord(JSONObject item) {
+        return item.has("image")
+                || item.has("imageUrl")
+                || item.has("url")
+                || item.has("mediaUrl")
+                || item.has("video")
+                || item.has("videoUrl")
+                || item.has("blobUrl")
+                || item.has("src");
+    }
+
+    private String firstString(JSONObject item, String... keys) {
+        for (String key : keys) {
+            if (!item.has(key) || item.isNull(key)) {
+                continue;
+            }
+
+            Object value = item.opt(key);
+
+            if (value instanceof String) {
+                String text = ((String) value).trim();
+
+                if (!text.isEmpty()) {
+                    return text;
+                }
+            }
+        }
+
+        return "";
+    }
+
+    /*
+     * Accept all URL names used by the website/backend and also
+     * nested objects such as:
+     *   "image": { "url": "https://..." }
+     */
+    private String extractMediaUrl(JSONObject item) {
+        String[] keys = {
+                "image",
+                "imageUrl",
+                "url",
+                "mediaUrl",
+                "video",
+                "videoUrl",
+                "blobUrl",
+                "downloadUrl",
+                "src",
+                "fileUrl",
+                "file"
+        };
+
+        for (String key : keys) {
+            if (!item.has(key) || item.isNull(key)) {
+                continue;
+            }
+
+            Object value = item.opt(key);
+
+            if (value instanceof String) {
+                String text = ((String) value).trim();
+
+                if (text.startsWith("http://")
+                        || text.startsWith("https://")) {
+                    return text;
+                }
+            }
+
+            if (value instanceof JSONObject) {
+                JSONObject nested = (JSONObject) value;
+
+                String nestedUrl = firstString(
+                        nested,
+                        "url",
+                        "href",
+                        "src",
+                        "downloadUrl",
+                        "blobUrl"
+                );
+
+                if (!nestedUrl.isEmpty()) {
+                    return nestedUrl;
+                }
+            }
+        }
+
+        return "";
     }
 
     private void renderCurrentMode() {
